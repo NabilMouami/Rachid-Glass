@@ -1,17 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FiInfo, FiUser, FiXCircle } from "react-icons/fi";
+import { FiInfo, FiXCircle, FiPackage } from "react-icons/fi";
 import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 import useDatePicker from "@/hooks/useDatePicker";
 import topTost from "@/utils/topTost";
 import { useSelector } from "react-redux";
-
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import Select from "react-select";
 import AsyncSelect from "react-select/async";
-import { components } from "react-select";
-
-import { FaCalendarAlt } from "react-icons/fa";
+import { FaCalendarAlt, FaBuilding, FaPhone, FaEnvelope } from "react-icons/fa";
 import { BsPlusCircle } from "react-icons/bs";
 
 import Swal from "sweetalert2";
@@ -20,64 +18,16 @@ import { useNavigate } from "react-router-dom";
 
 const MySwal = withReactContent(Swal);
 
-const previtems = [
+const initialItems = [
   {
     id: 1,
     product: "",
     qty: 1,
-    v1: 1, // Longueur - original value entered by user
-    v2: 1, // Largeur - original value entered by user
-    price_unit: 1, // Price per unit volume
+    price_unit: 1,
     total: 1,
     productId: null,
   },
 ];
-
-// Function to round to next multiple of 3 (for calculations only)
-const roundToNextMultipleOfThree = (value) => {
-  const numValue = parseFloat(value);
-
-  // Handle invalid values
-  if (isNaN(numValue) || numValue <= 0) {
-    return 1;
-  }
-
-  // If value is already a multiple of 3, return it as is
-  if (numValue % 3 === 0) {
-    return numValue;
-  }
-
-  // Calculate the next multiple of 3
-  const nextMultiple = Math.ceil(numValue / 3) * 3;
-  return nextMultiple;
-};
-
-// Function to check if value needs rounding (for display purposes only)
-const needsRounding = (value) => {
-  const numValue = parseFloat(value);
-
-  if (isNaN(numValue)) {
-    return false;
-  }
-
-  // Round if has decimal part OR is not multiple of 3
-  return numValue % 1 !== 0 || numValue % 3 !== 0;
-};
-
-// Get rounded value for an item field
-const getRoundedValue = (item, field) => {
-  if (field === "v1" || field === "v2") {
-    return roundToNextMultipleOfThree(item[field]);
-  }
-  return item[field];
-};
-
-// Calculate total for an item - divide by 100 AND round to next multiple of 3
-const calculateItemTotal = (item) => {
-  const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
-  return item.qty * calcV1 * calcV2 * item.price_unit;
-};
 
 // Moroccan invoice status options
 const statusOptions = [
@@ -100,96 +50,84 @@ const paymentTypeOptions = [
   { value: "non_paye", label: "Non Payé" },
 ];
 
-const BonLivrCreate = () => {
+// TVA options (Moroccan standard rates)
+const tvaOptions = [
+  { value: 0, label: "0% (Exonéré)" },
+  { value: 7, label: "7% (Taux réduit)" },
+  { value: 10, label: "10% (Taux intermédiaire)" },
+  { value: 14, label: "14% (Taux normal)" },
+  { value: 20, label: "20% (Taux standard)" },
+];
+
+const FactureAchatCreate = () => {
   const currentDateWithTime = new Date();
   const { startDate, setStartDate, renderFooter } =
     useDatePicker(currentDateWithTime);
-  const [items, setItems] = useState(previtems);
+
+  const [items, setItems] = useState(initialItems);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
-  const [clients, setClients] = useState([]);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
+  const [suppliers, setSuppliers] = useState([]);
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierPhone, setSupplierPhone] = useState("");
   const [invoiceNote, setInvoiceNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [invoiceStatus, setInvoiceStatus] = useState("brouillon");
-  const [advancementPrice, setAdvancementPrice] = useState(0);
   const [remainingAmount, setRemainingAmount] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountType, setDiscountType] = useState("fixed");
   const [paymentType, setPaymentType] = useState("espece");
   const [createdInvoiceId, setCreatedInvoiceId] = useState(null);
-  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
-  const [selectedClientId, setSelectedClientId] = useState("");
-  const [isLoadingClients, setIsLoadingClients] = useState(false);
-  const [priceAlerts, setPriceAlerts] = useState({}); // Track price alerts per item
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [isLoadingSuppliers, setIsLoadingSuppliers] = useState(false);
+  const [dueDate, setDueDate] = useState(null);
+  const [priceAlerts, setPriceAlerts] = useState({});
+
+  // TVA state
+  const [tvaRate, setTvaRate] = useState(20);
+  const [includeTvaInPrice, setIncludeTvaInPrice] = useState(true);
+  const [ice, setIce] = useState("");
+  const [ste, setSte] = useState("");
+
   const selectRefs = useRef({});
   const navigate = useNavigate();
 
-  // Handle Enter key - add new row below current item
-  const handleAddRowBelow = (e, currentItemId) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const currentIndex = items.findIndex(item => item.id === currentItemId);
-      if (currentIndex !== -1) {
-        // Create new item after current
-        const newItem = {
-          id: `temp-${Date.now()}`,
-          product: "",
-          productId: null,
-          qty: 1,
-          v1: 1,
-          v2: 1,
-          price_unit: 1,
-          total: 1,
-        };
-        const newItems = [...items];
-        newItems.splice(currentIndex + 1, 0, newItem);
-        setItems(newItems);
-        
-        // Focus on the new row's product select after render
-        setTimeout(() => {
-          const selectRef = selectRefs.current[newItem.id];
-          if (selectRef) {
-            selectRef.focus();
-          }
-        }, 100);
-      }
-    }
-  };
-
-  // Get current user from Redux
-  const User = useSelector((state) => state.userInfo.User);
-
-  // Fetch clients on component mount
   useEffect(() => {
-    const fetchClients = async () => {
-      setIsLoadingClients(true);
+    if (!startDate) {
+      setStartDate(new Date());
+    }
+  }, []);
+
+  // Fetch suppliers on component mount
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      setIsLoadingSuppliers(true);
       try {
-        const response = await axios.get(`${config_url}/api/clients`);
-        const clientOptions = (response.data?.clients || []).map((client) => {
-          const refPart = client.reference ? `(${client.reference}) ` : "";
-          return {
-            value: client.id,
-            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
-            searchText: [
-              client.nom_complete?.toLowerCase() || "",
-              client.telephone?.toLowerCase() || "",
-              client.reference?.toLowerCase() || "",
-            ].join(" "),
-            ...client,
-          };
-        });
-        setClients(clientOptions);
+        const response = await axios.get(`${config_url}/api/fornisseurs`);
+        const supplierOptions = (response.data?.fornisseurs || []).map(
+          (supplier) => {
+            return {
+              value: supplier.id,
+              label: `${supplier.reference ? `(${supplier.reference}) ` : ""}${supplier.nom_complete}`,
+              searchText: [
+                supplier.nom_complete?.toLowerCase() || "",
+                supplier.telephone?.toLowerCase() || "",
+                supplier.reference?.toLowerCase() || "",
+              ].join(" "),
+              ...supplier,
+            };
+          },
+        );
+        setSuppliers(supplierOptions);
       } catch (error) {
-        console.error("Error fetching clients:", error);
-        topTost("Erreur lors du chargement des clients", "error");
+        console.error("Error fetching suppliers:", error);
+        topTost("Erreur lors du chargement des fournisseurs", "error");
       } finally {
-        setIsLoadingClients(false);
+        setIsLoadingSuppliers(false);
       }
     };
 
-    fetchClients();
+    fetchSuppliers();
   }, []);
 
   // Fetch products on component mount
@@ -203,7 +141,7 @@ const BonLivrCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix Achat: ${produit.prix_achat || produit.prix_vente} DH)`,
           },
         }));
 
@@ -219,41 +157,35 @@ const BonLivrCreate = () => {
     fetchProducts();
   }, []);
 
-  useEffect(() => {
-    if (!startDate) {
-      setStartDate(new Date());
-    }
-  }, []);
-
   // Function to check if price is within allowed range
   const checkPriceRange = (produitData, price) => {
     if (!produitData) return { isValid: true, message: "" };
 
-    const prixVenteMin = parseFloat(produitData.prix_vente_min);
-    const prixVenteMax = parseFloat(produitData.prix_vente_max);
+    const prixAchatMin = parseFloat(produitData.prix_achat_min);
+    const prixAchatMax = parseFloat(produitData.prix_achat_max);
 
-    if (prixVenteMin && prixVenteMax) {
-      if (price < prixVenteMin) {
+    if (prixAchatMin && prixAchatMax) {
+      if (price < prixAchatMin) {
         return {
           isValid: false,
-          message: `⚠️ Prix (${price} DH) inférieur au prix minimum (${prixVenteMin} DH)`,
+          message: `⚠️ Prix (${price} DH) inférieur au prix minimum (${prixAchatMin} DH)`,
         };
       }
-      if (price > prixVenteMax) {
+      if (price > prixAchatMax) {
         return {
           isValid: false,
-          message: `⚠️ Prix (${price} DH) supérieur au prix maximum (${prixVenteMax} DH)`,
+          message: `⚠️ Prix (${price} DH) supérieur au prix maximum (${prixAchatMax} DH)`,
         };
       }
-    } else if (prixVenteMin && price < prixVenteMin) {
+    } else if (prixAchatMin && price < prixAchatMin) {
       return {
         isValid: false,
-        message: `⚠️ Prix (${price} DH) inférieur au prix minimum (${prixVenteMin} DH)`,
+        message: `⚠️ Prix (${price} DH) inférieur au prix minimum (${prixAchatMin} DH)`,
       };
-    } else if (prixVenteMax && price > prixVenteMax) {
+    } else if (prixAchatMax && price > prixAchatMax) {
       return {
         isValid: false,
-        message: `⚠️ Prix (${price} DH) supérieur au prix maximum (${prixVenteMax} DH)`,
+        message: `⚠️ Prix (${price} DH) supérieur au prix maximum (${prixAchatMax} DH)`,
       };
     }
 
@@ -261,12 +193,10 @@ const BonLivrCreate = () => {
   };
 
   const loadProduits = async (inputValue) => {
-    // Si pas de recherche, retourner tous les produits
     if (!inputValue) {
       return products;
     }
 
-    // Filtrer localement les produits existants
     const filtered = products.filter((option) => {
       const searchTerm = inputValue.toLowerCase();
       const produit = option.data;
@@ -276,7 +206,6 @@ const BonLivrCreate = () => {
       );
     });
 
-    // Si aucun résultat local, faire une recherche API
     if (filtered.length === 0 && inputValue.length >= 2) {
       try {
         const response = await axios.get(
@@ -288,7 +217,7 @@ const BonLivrCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix Achat: ${produit.prix_achat || produit.prix_vente} DH)`,
           },
         }));
 
@@ -304,11 +233,9 @@ const BonLivrCreate = () => {
 
   const addItem = () => {
     const newItem = {
-      id: items.length + 1,
+      id: Date.now(),
       product: "",
       qty: 1,
-      v1: 1,
-      v2: 1,
       price_unit: 1,
       total: 1,
       productId: null,
@@ -319,16 +246,14 @@ const BonLivrCreate = () => {
   const removeItem = (id) => {
     if (items.length > 1) {
       setItems(items.filter((item) => item.id !== id));
-      // Clean up price alerts
       const newAlerts = { ...priceAlerts };
       delete newAlerts[id];
       setPriceAlerts(newAlerts);
     }
   };
 
-  // Handle product selection from AsyncSelect for a specific item
+  // Handle product selection
   const handleProduitSelect = (selectedOption, itemId) => {
-    // Si selectedOption est null (clear), réinitialiser le produit
     if (!selectedOption) {
       const updatedItems = items.map((item) => {
         if (item.id === itemId) {
@@ -338,17 +263,13 @@ const BonLivrCreate = () => {
             productId: null,
             price_unit: 1,
           };
-
-          // Recalculate total with default price using rounded dimensions
-          updatedItem.total = calculateItemTotal(updatedItem);
-
+          updatedItem.total = updatedItem.qty * updatedItem.price_unit;
           return updatedItem;
         }
         return item;
       });
 
       setItems(updatedItems);
-      // Clear alert for this item
       setPriceAlerts((prev) => {
         const newAlerts = { ...prev };
         delete newAlerts[itemId];
@@ -358,9 +279,8 @@ const BonLivrCreate = () => {
     }
 
     const produitData = selectedOption.data;
-    const price = produitData.prix_vente;
+    const price = produitData.prix_achat || produitData.prix_vente || 0;
 
-    // Check price range
     const priceCheck = checkPriceRange(produitData, price);
 
     if (!priceCheck.isValid) {
@@ -384,10 +304,7 @@ const BonLivrCreate = () => {
           productId: selectedOption.value,
           price_unit: price,
         };
-
-        // Recalculate total with new price using rounded dimensions
-        updatedItem.total = calculateItemTotal(updatedItem);
-
+        updatedItem.total = updatedItem.qty * updatedItem.price_unit;
         return updatedItem;
       }
       return item;
@@ -396,7 +313,6 @@ const BonLivrCreate = () => {
     setItems(updatedItems);
   };
 
-  // Helper to parse French decimal format (comma to period)
   const parseFrenchNumber = (value) => {
     if (!value) return 0;
     const processed = String(value).replace(",", ".");
@@ -414,15 +330,12 @@ const BonLivrCreate = () => {
           [field]: processedValue,
         };
 
-        // If product field is manually changed, clear the productId
         if (field === "product") {
           updatedItem.productId = null;
         }
 
-        // Calculate total when any of the relevant fields change
-        // using rounded dimensions for v1 and v2 in the calculation
-        if (["qty", "v1", "v2", "price_unit"].includes(field)) {
-          updatedItem.total = calculateItemTotal(updatedItem);
+        if (["qty", "price_unit"].includes(field)) {
+          updatedItem.total = updatedItem.qty * updatedItem.price_unit;
         }
 
         return updatedItem;
@@ -435,7 +348,6 @@ const BonLivrCreate = () => {
   const handlePriceUnitChange = (id, value) => {
     const price = parseFloat(value) || 0;
 
-    // Find the product for this item
     const item = items.find((i) => i.id === id);
     const product = products.find((p) => p.value === item?.productId);
 
@@ -461,8 +373,7 @@ const BonLivrCreate = () => {
           ...item,
           price_unit: price,
         };
-        // Calculate total using rounded dimensions
-        updatedItem.total = calculateItemTotal(updatedItem);
+        updatedItem.total = updatedItem.qty * updatedItem.price_unit;
         return updatedItem;
       }
       return item;
@@ -470,26 +381,22 @@ const BonLivrCreate = () => {
     setItems(updatedItems);
   };
 
-  // Handle client selection
-  const handleClientSelect = (clientId) => {
-    setSelectedClientId(clientId);
+  // Handle supplier selection
+  const handleSupplierSelect = (supplierId) => {
+    setSelectedSupplierId(supplierId);
 
-    const selectedClient = clients.find((c) => c.value == clientId);
-    if (selectedClient) {
-      setCustomerName(selectedClient.nom_complete);
-      setCustomerPhone(selectedClient.telephone || "");
+    const selectedSupplier = suppliers.find((s) => s.value == supplierId);
+    if (selectedSupplier) {
+      setSupplierName(selectedSupplier.nom_complete);
+      setSupplierPhone(selectedSupplier.telephone || "");
     }
   };
 
-  // REMOVED: handleBlur function - no more rounding on blur
-  // The user can now enter any value and it stays as entered
-
-  // Calculate subtotal (before discount) using rounded dimensions for each item
+  // Calculate totals
   const subTotal = items.reduce((accumulator, currentValue) => {
-    return accumulator + calculateItemTotal(currentValue);
+    return accumulator + (currentValue.total || 0);
   }, 0);
 
-  // Calculate discount
   const calculateDiscount = () => {
     if (discountType === "percentage") {
       return (subTotal * discountAmount) / 100;
@@ -500,22 +407,19 @@ const BonLivrCreate = () => {
 
   const discount = calculateDiscount();
 
-  // Calculate total after discount
-  const totalAfterDiscount = subTotal - discount;
+  const totalAfterDiscountHT = subTotal - discount;
+  const tvaAmount = (totalAfterDiscountHT * tvaRate) / 100;
+  const totalTTC = includeTvaInPrice
+    ? totalAfterDiscountHT + tvaAmount
+    : totalAfterDiscountHT;
+  const totalHT = totalAfterDiscountHT;
 
-  // Final total (after discount)
-  const total = Math.max(0, totalAfterDiscount).toFixed(2);
+  const total = totalTTC;
 
-  // Update remaining amount when total or advancement changes
   useEffect(() => {
-    const remaining = totalAfterDiscount - advancementPrice;
+    const remaining = total;
     setRemainingAmount(remaining > 0 ? remaining : 0);
-  }, [totalAfterDiscount, advancementPrice]);
-
-  const handleAdvancementChange = (e) => {
-    const value = parseFloat(e.target.value) || 0;
-    setAdvancementPrice(value);
-  };
+  }, [total]);
 
   const handleDiscountChange = (e) => {
     const value = parseFloat(e.target.value) || 0;
@@ -527,7 +431,6 @@ const BonLivrCreate = () => {
     setDiscountAmount(0);
   };
 
-  // Get maximum discount value based on type
   const getMaxDiscount = () => {
     if (discountType === "percentage") {
       return 100;
@@ -537,56 +440,55 @@ const BonLivrCreate = () => {
   };
 
   const resetForm = () => {
-    setItems(previtems);
-    setCustomerName("");
-    setCustomerPhone("");
+    setItems(initialItems);
+    setSupplierName("");
+    setSupplierPhone("");
     setInvoiceNote("");
     setInvoiceStatus("brouillon");
-    setAdvancementPrice(0);
     setRemainingAmount(0);
     setDiscountAmount(0);
     setDiscountType("fixed");
     setPaymentType("espece");
     setCreatedInvoiceId(null);
-    setSelectedClientId("");
+    setSelectedSupplierId("");
+    setTvaRate(20);
+    setIncludeTvaInPrice(true);
+    setStartDate(new Date());
+    setDueDate(null);
     setPriceAlerts({});
+    setIce("");
+    setSte("");
   };
 
-  const handleSubmit = async () => {
-    if (!customerName.trim()) {
-      topTost("Le nom du client est requis", "error");
-      return;
+  const validateForm = () => {
+    if (!supplierName.trim()) {
+      topTost("Le nom du fournisseur est requis", "error");
+      return false;
     }
 
-    if (
-      (invoiceStatus === "envoyée" ||
-        invoiceStatus === "partiellement_payée") &&
-      !customerPhone.trim()
-    ) {
-      topTost(
-        "Le numéro de téléphone est requis pour envoyer la Bon Livraison",
-        "error",
-      );
-      return;
-    }
+    for (const item of items) {
+      if (!item.productId && !item.product.trim()) {
+        topTost("Veuillez sélectionner un produit pour chaque ligne", "error");
+        return false;
+      }
 
-    if (advancementPrice > totalAfterDiscount) {
-      topTost("L'acompte ne peut pas dépasser le montant total", "error");
-      return;
+      if (item.qty <= 0 || item.price_unit <= 0) {
+        topTost("La quantité et le prix doivent être supérieurs à 0", "error");
+        return false;
+      }
     }
 
     if (discount > subTotal) {
       topTost("La remise ne peut pas dépasser le sous-total", "error");
-      return;
+      return false;
     }
 
-    const hasProducts = items.some((item) => item.product.trim() !== "");
-    if (!hasProducts) {
-      topTost("Veuillez ajouter au moins un produit", "error");
-      return;
-    }
+    return true;
+  };
 
-    // Check for price alerts
+  const handleSubmit = async () => {
+    if (!validateForm()) return;
+
     const hasAlerts = Object.keys(priceAlerts).length > 0;
 
     if (hasAlerts) {
@@ -624,161 +526,117 @@ const BonLivrCreate = () => {
     try {
       const calculatedSubTotal = subTotal;
       const calculatedDiscount = discount;
-      const calculatedTotal = calculatedSubTotal - calculatedDiscount;
-      const calculatedRemaining = Math.max(
-        0,
-        calculatedTotal - advancementPrice,
-      );
+      const calculatedTvaAmount = tvaAmount;
+      const calculatedTotalHT = totalAfterDiscountHT;
+      const calculatedTotalTTC = totalTTC;
 
-      // Prepare invoice data - match backend expectations
       const invoiceData = {
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        fornisseurId: selectedSupplierId || null,
+        supplierName: supplierName.trim(),
+        supplierPhone: supplierPhone.trim(),
         issueDate: startDate,
+        dueDate: dueDate,
         notes: invoiceNote,
         status: invoiceStatus,
         discountType: discountType,
         discountValue: parseFloat(discountAmount),
         paymentType: paymentType,
-
-        // Send advancement as a single value (backend handles both)
-        advancement: parseFloat(advancementPrice),
-
-        // Send items with correct field names expected by backend
-        // IMPORTANT: Send the ORIGINAL v1 and v2 values (not rounded)
-        // but the backend will receive totalPrice already calculated with rounded values
+        tvaRate: parseFloat(tvaRate),
+        tvaAmount: parseFloat(calculatedTvaAmount),
+        includeTvaInPrice: includeTvaInPrice,
         items: items.map((item) => ({
-          productId: item.productId || null, // This will be mapped to produit_id in backend
-          quantity: parseFloat(item.qty), // This will be mapped to quantite in backend
-          v1: parseFloat(item.v1), // Original value entered by user (not rounded)
-          v2: parseFloat(item.v2), // Original value entered by user (not rounded)
-          unitPrice: parseFloat(item.price_unit), // This will be mapped to prix_unitaire
-          totalPrice: parseFloat(calculateItemTotal(item)), // This uses rounded dimensions for calculation
-          articleName: item.product, // For reference, but not used in BonLivraisonProduit
-          deliveredQuantity: 0, // Add this if needed
-          priceAlert: priceAlerts[item.id] || null, // Include price alert info
+          productId: item.productId || null,
+          quantity: parseFloat(item.qty),
+          unitPrice: parseFloat(item.price_unit),
+          totalPrice: parseFloat(item.total),
+          articleName: item.product,
+          priceAlert: priceAlerts[item.id] || null,
         })),
-        // Send financial calculations
         subTotal: parseFloat(calculatedSubTotal),
-        total: parseFloat(calculatedTotal),
+        totalHT: parseFloat(calculatedTotalHT),
+        totalTTC: parseFloat(calculatedTotalTTC),
         discountAmount: parseFloat(calculatedDiscount),
-        remainingAmount: parseFloat(calculatedRemaining),
-
-        // Client ID if available
-        clientId: selectedClientId || null,
-
-        // User who created/validated the BonLivraison
-        preparedById: User?.id || null,
-        preparedBy: User?.name || "",
-        validatedById: User?.id || null,
-        validatedBy: User?.name || "",
-
-        // Optionally add advancements array if you want multiple advancements
-        advancements:
-          advancementPrice > 0
-            ? [
-                {
-                  amount: parseFloat(advancementPrice),
-                  paymentDate: new Date(),
-                  paymentMethod: paymentType || "espece",
-                  reference: "",
-                  notes: "Avancement initial",
-                },
-              ]
-            : [],
+        remainingAmount: parseFloat(calculatedTotalTTC),
+        ice: ice || "",
+        ste: ste || "",
       };
 
-      console.log("📦 Sending Bon Livraison data to backend:", invoiceData);
+      console.log("📦 Sending Purchase Invoice data to backend:", invoiceData);
 
-      // Send to backend
       const response = await axios.post(
-        `${config_url}/api/bonlivraisons`,
+        `${config_url}/api/factures-achat`,
         invoiceData,
       );
 
-      console.log(response);
       if (response.data.success) {
-        // Use 'bon' instead of 'bonLivraison' to match backend response
-        const bon = response.data.bon;
-        const totalAdvancements = response.data.totalAdvancements || 0;
+        const factureAchat = response.data.factureAchat;
 
-        console.log("✅ Success data:", response.data); // For debugging
+        if (factureAchat && factureAchat.id) {
+          setCreatedInvoiceId(factureAchat.id);
+        }
 
-        // Show appropriate success message based on alerts
         if (hasAlerts) {
           topTost(
-            "Bon Livraison créée avec des prix hors fourchette!",
+            "Facture d'achat créée avec des prix hors fourchette!",
             "warning",
           );
         } else {
-          topTost("Bon Livraison créée avec succès!", "success");
+          topTost("Facture d'achat créée avec succès!", "success");
         }
 
-        // Store the created invoice ID
-        if (bon && bon.id) {
-          setCreatedInvoiceId(bon.id);
-        }
-
-        // Use setTimeout to ensure DOM is ready and avoid conflicts
         setTimeout(() => {
           MySwal.fire({
             title: hasAlerts ? "Succès avec alertes !" : "Succès !",
             icon: hasAlerts ? "warning" : "success",
             html: `
-        <div style="text-align:left;font-size:14px">
-          <p><strong>Numéro :</strong> ${bon.num_bon_livraison || "N/A"}</p>
-          <p><strong>Montant TTC :</strong> ${bon.montant_ttc || 0} DH</p>
-          <p><strong>Acomptes versés :</strong> ${totalAdvancements} DH</p>
-          <p><strong>Montant restant :</strong> ${bon.montant_restant || 0} DH</p>
-          <p><strong>Statut :</strong> ${bon.status || "N/A"}</p>
-          ${hasAlerts ? '<p class="text-warning mt-2"><strong>⚠️ Attention:</strong> Des prix hors fourchette ont été validés</p>' : ""}
-        </div>
-      `,
-            confirmButtonText: "Voir le bon",
+              <div style="text-align:left;font-size:14px">
+                <p><strong>Numéro :</strong> ${factureAchat.num_facture || "N/A"}</p>
+                <p><strong>Date :</strong> ${new Date(startDate).toLocaleString("fr-FR")}</p>
+                <p><strong>Fournisseur :</strong> ${supplierName}</p>
+                <p><strong>Total HT :</strong> ${calculatedTotalHT.toFixed(2)} DH</p>
+                <p><strong>TVA (${tvaRate}%) :</strong> ${calculatedTvaAmount.toFixed(2)} DH</p>
+                <p><strong>Total TTC :</strong> ${calculatedTotalTTC.toFixed(2)} DH</p>
+                <p><strong>Statut :</strong> ${factureAchat.status || "N/A"}</p>
+                ${hasAlerts ? '<p class="text-warning mt-2"><strong>⚠️ Attention:</strong> Des prix hors fourchette ont été validés</p>' : ""}
+              </div>
+            `,
+            confirmButtonText: "Voir la facture",
             showCancelButton: true,
-            cancelButtonText: "Nouveau bon",
-            // Add these options to ensure it appears on top
+            cancelButtonText: "Nouvelle facture",
             backdrop: true,
             allowOutsideClick: false,
             allowEscapeKey: false,
           }).then((result) => {
             if (result.isConfirmed) {
-              navigate(`/bon-livraisons/${bon.id}`);
+              navigate(`/facture-achat/${factureAchat.id}`);
             } else {
               resetForm();
             }
           });
-        }, 100); // Small delay to ensure state updates are complete
+        }, 100);
       }
     } catch (error) {
-      console.error("Error creating bonLivraison:", error);
+      console.error("Error creating purchase invoice:", error);
 
-      // Improved error handling
       if (error.response) {
-        console.error("Error response data:", error.response.data);
-        console.error("Error response status:", error.response.status);
-
-        // Check for validation errors
         if (error.response.data.errors) {
           const errorMessages = error.response.data.errors.join(", ");
           topTost(`Erreurs de validation: ${errorMessages}`, "error");
         } else if (error.response.data.message) {
           topTost(error.response.data.message, "error");
         } else {
-          topTost("Erreur lors de la création de la Bon Livraison", "error");
+          topTost("Erreur lors de la création de la facture d'achat", "error");
         }
       } else if (error.request) {
-        console.error("No response received:", error.request);
         topTost("Pas de réponse du serveur", "error");
       } else {
-        topTost("Erreur lors de la création de la Bon Livraison", "error");
+        topTost("Erreur lors de la création de la facture d'achat", "error");
       }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Custom ClearIndicator component for single-select
   const ClearIndicator = (props) => {
     const {
       innerProps: { ref, ...restInnerProps },
@@ -804,14 +662,13 @@ const BonLivrCreate = () => {
     const { data, innerRef, innerProps, isSelected, isFocused } = props;
     const produit = data.data;
 
-    // Build price range info
     let priceRangeInfo = "";
-    if (produit.prix_vente_min && produit.prix_vente_max) {
-      priceRangeInfo = ` | Fourchette: ${produit.prix_vente_min} - ${produit.prix_vente_max} DH`;
-    } else if (produit.prix_vente_min) {
-      priceRangeInfo = ` | Min: ${produit.prix_vente_min} DH`;
-    } else if (produit.prix_vente_max) {
-      priceRangeInfo = ` | Max: ${produit.prix_vente_max} DH`;
+    if (produit.prix_achat_min && produit.prix_achat_max) {
+      priceRangeInfo = ` | Fourchette achat: ${produit.prix_achat_min} - ${produit.prix_achat_max} DH`;
+    } else if (produit.prix_achat_min) {
+      priceRangeInfo = ` | Min achat: ${produit.prix_achat_min} DH`;
+    } else if (produit.prix_achat_max) {
+      priceRangeInfo = ` | Max achat: ${produit.prix_achat_max} DH`;
     }
 
     return (
@@ -824,15 +681,9 @@ const BonLivrCreate = () => {
         <div
           className={`text-sm ${isSelected ? "text-white" : "text-gray-600"}`}
         >
-          Stock: {produit.qty} | Prix: {produit.prix_vente} DH{priceRangeInfo}
+          Stock: {produit.qty} | Prix Achat:{" "}
+          {produit.prix_achat || produit.prix_vente} DH{priceRangeInfo}
         </div>
-        {produit.surface > 0 && (
-          <div
-            className={`text-xs ${isSelected ? "text-white" : "text-gray-500"}`}
-          >
-            Surface: {produit.surface} m²
-          </div>
-        )}
       </div>
     );
   };
@@ -853,7 +704,7 @@ const BonLivrCreate = () => {
       <div className="col-xl-12">
         <div className="card invoice-container">
           <div className="card-header">
-            <h5>Creer Bon Livraison</h5>
+            <h5>Créer Facture d'Achat</h5>
           </div>
           <div className="card-body p-0">
             <div className="px-4 pt-4">
@@ -897,23 +748,25 @@ const BonLivrCreate = () => {
                 </div>
               </div>
 
-              {/* Customer Information */}
+              {/* Supplier Information */}
               <div className="row mt-4">
                 <div className="col-md-6">
                   <label className="form-label">
-                    <FiUser className="me-2" />
-                    Client <span className="text-danger">*</span>
+                    <FaBuilding className="me-2" />
+                    Fournisseur <span className="text-danger">*</span>
                   </label>
                   <Select
-                    options={clients}
+                    options={suppliers}
                     className="react-select"
                     classNamePrefix="react-select"
-                    placeholder="Sélectionner un client"
-                    value={clients.find((c) => c.value === selectedClientId)}
-                    onChange={(e) => handleClientSelect(e.value)}
+                    placeholder="Sélectionner un fournisseur"
+                    value={suppliers.find(
+                      (s) => s.value === selectedSupplierId,
+                    )}
+                    onChange={(e) => handleSupplierSelect(e.value)}
                     isSearchable
                     required
-                    noOptionsMessage={() => "Aucun client trouvé"}
+                    noOptionsMessage={() => "Aucun fournisseur trouvé"}
                     filterOption={(option, rawInput) => {
                       if (!rawInput) return true;
                       const search = rawInput.toLowerCase().trim();
@@ -929,55 +782,14 @@ const BonLivrCreate = () => {
                     }}
                   />
                 </div>
-                <div className="col-md-6">
-                  <div className="form-group">
-                    <label htmlFor="customerPhone" className="form-label">
-                      Téléphone Client: *
-                      {["envoyée", "partiellement_payée"].includes(
-                        invoiceStatus,
-                      ) && <span className="text-danger"> (Requis)</span>}
-                    </label>
-                    <input
-                      type="tel"
-                      className="form-control"
-                      id="customerPhone"
-                      placeholder="06 XX XX XX XX ou +212 6 XX XX XX XX"
-                      value={customerPhone}
-                      onChange={(e) => setCustomerPhone(e.target.value)}
-                      required={["envoyée", "partiellement_payée"].includes(
-                        invoiceStatus,
-                      )}
-                    />
-                  </div>
-                </div>
               </div>
 
-              {/* Manual Customer Name */}
-              <div className="row mt-3">
-                <div className="col-md-12">
-                  <div className="form-group">
-                    <label htmlFor="customerName" className="form-label">
-                      Nom Client: *
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      id="customerName"
-                      placeholder="Entrez Le Nom De Client"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Status, Payment Type, and Advancement */}
+              {/* Status, Payment Type, TVA */}
               <div className="row mt-3">
                 <div className="col-md-3">
                   <div className="form-group">
                     <label htmlFor="invoiceStatus" className="form-label">
-                      Statut de la Bon Livraison:
+                      Statut de la Facture:
                     </label>
                     <select
                       className="form-control"
@@ -1014,26 +826,61 @@ const BonLivrCreate = () => {
                 </div>
                 <div className="col-md-3">
                   <div className="form-group">
-                    <label htmlFor="advancementPrice" className="form-label">
-                      Avancement (Dh):
+                    <label htmlFor="tvaRate" className="form-label">
+                      TVA (%):
                     </label>
-                    <input
-                      type="number"
+                    <select
                       className="form-control"
-                      id="advancementPrice"
-                      placeholder="0.00"
-                      step="0.01"
-                      min="0"
-                      max={totalAfterDiscount}
-                      value={advancementPrice}
-                      onChange={handleAdvancementChange}
-                    />
-                    <small className="text-muted">
-                      Maximum: {totalAfterDiscount.toFixed(2)} Dh
-                    </small>
+                      id="tvaRate"
+                      value={tvaRate}
+                      onChange={(e) => setTvaRate(parseFloat(e.target.value))}
+                    >
+                      {tvaOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <div className="col-md-3">
+                  <div className="form-group">
+                    <label className="form-label">Prix:</label>
+                    <div className="d-flex gap-3 mt-2">
+                      <div className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="radio"
+                          name="includeTva"
+                          id="ttc"
+                          checked={includeTvaInPrice}
+                          onChange={() => setIncludeTvaInPrice(true)}
+                        />
+                        <label className="form-check-label" htmlFor="ttc">
+                          TTC
+                        </label>
+                      </div>
+                      <div className="form-check">
+                        <input
+                          className="form-check-input"
+                          type="radio"
+                          name="includeTva"
+                          id="ht"
+                          checked={!includeTvaInPrice}
+                          onChange={() => setIncludeTvaInPrice(false)}
+                        />
+                        <label className="form-check-label" htmlFor="ht">
+                          HT
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Discount */}
+              <div className="row mt-3">
+                <div className="col-md-4">
                   <div className="form-group">
                     <label htmlFor="discountType" className="form-label">
                       Type de Remise:
@@ -1049,11 +896,7 @@ const BonLivrCreate = () => {
                     </select>
                   </div>
                 </div>
-              </div>
-
-              {/* Discount Input Section */}
-              <div className="row mt-3">
-                <div className="col-md-6">
+                <div className="col-md-4">
                   <div className="form-group">
                     <label htmlFor="discountAmount" className="form-label">
                       {discountType === "percentage"
@@ -1079,19 +922,12 @@ const BonLivrCreate = () => {
                     </small>
                   </div>
                 </div>
-                <div className="col-md-6">
+                <div className="col-md-4">
                   <div className="form-group">
                     <label className="form-label">Valeur de la Remise:</label>
                     <div className="p-2 bg-light rounded">
                       <p className="mb-0 fw-bold text-danger">
-                        -{discount.toFixed(2)}{" "}
-                        {discountType === "percentage" ? "%" : "Dh"}
-                        {discountType === "percentage" && (
-                          <span className="text-muted ms-2">
-                            ({((discountAmount / 100) * subTotal).toFixed(2)}{" "}
-                            Dh)
-                          </span>
-                        )}
+                        -{discount.toFixed(2)} Dh
                       </p>
                     </div>
                   </div>
@@ -1127,21 +963,13 @@ const BonLivrCreate = () => {
             <div className="px-4 clearfix proposal-table">
               <div className="mb-4 d-flex align-items-center justify-content-between">
                 <div>
-                  <h6 className="fw-bold">Ajouter des éléments de Verre :</h6>
+                  <h6 className="fw-bold">Ajouter des produits :</h6>
                   <span className="fs-12 text-muted">
-                    Ajouter des éléments avec des dimensions à la Bon Livraison.
-                    (Les calculs de prix utilisent les dimensions arrondies au
-                    multiple de 3 supérieur, mais les valeurs originales saisies
-                    sont conservées)
+                    Ajouter des produits à la facture d'achat
                   </span>
                 </div>
-                <div
-                  className="avatar-text avatar-sm"
-                  data-bs-toggle="tooltip"
-                  data-bs-trigger="hover"
-                  title="Total = Qty × Longueur (arrondie au multiple de 3) × Largeur (arrondie au multiple de 3) × Unit Price"
-                >
-                  <FiInfo />
+                <div className="avatar-text avatar-sm">
+                  <FiPackage />
                 </div>
               </div>
               <div className="table-responsive">
@@ -1151,13 +979,11 @@ const BonLivrCreate = () => {
                 >
                   <thead>
                     <tr className="single-item">
-                      <th className="text-center wd-50">#</th>
-                      <th className="text-center wd-350">Nom d'Article</th>
-                      <th className="text-center wd-80">Qty</th>
-                      <th className="text-center wd-100">Longueur</th>
-                      <th className="text-center wd-100">Largeur</th>
-                      <th className="text-center wd-120">Prix/Unité</th>
-                      <th className="text-center wd-120">Total</th>
+                      <th className="text-center wd-100">#</th>
+                      <th className="text-center wd-400">Nom d'Article</th>
+                      <th className="text-center wd-100">Quantité</th>
+                      <th className="text-center wd-100">Prix Unitaire (DH)</th>
+                      <th className="text-center wd-150">Total (DH)</th>
                       <th className="text-center wd-100">Action</th>
                     </tr>
                   </thead>
@@ -1167,10 +993,6 @@ const BonLivrCreate = () => {
                         (p) => p.value === item.productId,
                       );
                       const hasPriceAlert = priceAlerts[item.id];
-
-                      // Calculate values divided by 100 and rounded to next multiple of 3
-                      const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
-                      const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
 
                       return (
                         <tr
@@ -1225,17 +1047,6 @@ const BonLivrCreate = () => {
                                       Option: customOption,
                                       ClearIndicator: ClearIndicator,
                                     }}
-                                    formatOptionLabel={(option) => (
-                                      <div>
-                                        <div className="fw-semibold">
-                                          {option.label}
-                                        </div>
-                                        <div className="text-muted small">
-                                          Stock: {option.data.qty} | Prix:{" "}
-                                          {option.data.prix_vente} DH
-                                        </div>
-                                      </div>
-                                    )}
                                     isClearable={true}
                                     isMulti={false}
                                     styles={{
@@ -1279,9 +1090,9 @@ const BonLivrCreate = () => {
                             <input
                               type="number"
                               name="qty"
-                              placeholder="Qty"
-                              className="form-control"
-                              style={{ minWidth: "60px", width: "80px" }}
+                              placeholder="Quantité"
+                              className="form-control qty"
+                              style={{ minWidth: "80px", width: "100px" }}
                               step="1"
                               min="1"
                               value={item.qty}
@@ -1297,41 +1108,11 @@ const BonLivrCreate = () => {
                           <td>
                             <input
                               type="number"
-                              name="v1"
-                              placeholder="Longueur"
-                              className="form-control"
-                              style={{ minWidth: "80px", width: "100px" }}
-                              step="any"
-                              min="0.01"
-                              value={item.v1}
-                              onChange={(e) =>
-                                handleInputChange(item.id, "v1", e.target.value)
-                              }
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              name="v2"
-                              placeholder="Largeur"
-                              className="form-control"
-                              style={{ minWidth: "80px", width: "100px" }}
-                              step="any"
-                              min="0.01"
-                              value={item.v2}
-                              onChange={(e) =>
-                                handleInputChange(item.id, "v2", e.target.value)
-                              }
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
                               name="price_unit"
-                              placeholder="Prix/Unit"
-                              className={`form-control ${hasPriceAlert ? "border-warning" : ""}`}
+                              placeholder="Prix Unitaire"
+                              className={`form-control price ${hasPriceAlert ? "border-warning" : ""}`}
                               style={{ minWidth: "100px", width: "120px" }}
-                              step="any"
+                              step="0.01"
                               min="0.01"
                               value={item.price_unit}
                               onChange={(e) =>
@@ -1344,10 +1125,14 @@ const BonLivrCreate = () => {
                               type="text"
                               className="form-control"
                               readOnly
-                              value={typeof item.total === 'number' ? item.total.toFixed(2) : parseFloat(item.total || 0).toFixed(2)}
+                              value={
+                                typeof item.total === "number"
+                                  ? item.total.toFixed(2)
+                                  : parseFloat(item.total || 0).toFixed(2)
+                              }
                             />
                             <small className="text-muted d-block">
-                              {item.qty} × {calcV1} × {calcV2} × {item.price_unit}
+                              {item.qty} × {item.price_unit}
                             </small>
                           </td>
                           <td className="text-center">
@@ -1355,16 +1140,16 @@ const BonLivrCreate = () => {
                               className="btn btn-sm btn-success me-1"
                               onClick={() => {
                                 const newItem = {
-                                  id: `temp-${Date.now()}`,
+                                  id: Date.now(),
                                   product: item.product,
                                   productId: item.productId,
                                   qty: 1,
-                                  v1: item.v1 || 1,
-                                  v2: item.v2 || 1,
                                   price_unit: item.price_unit || 1,
                                   total: parseFloat(item.price_unit) || 1,
                                 };
-                                const currentIndex = items.findIndex(i => i.id === item.id);
+                                const currentIndex = items.findIndex(
+                                  (i) => i.id === item.id,
+                                );
                                 const newItems = [...items];
                                 newItems.splice(currentIndex + 1, 0, newItem);
                                 setItems(newItems);
@@ -1393,7 +1178,7 @@ const BonLivrCreate = () => {
                   className="btn btn-sm btn-primary d-flex justify-content-end gap-2"
                   onClick={addItem}
                 >
-                  Ajouter Nouveau Article
+                  Ajouter Nouveau Produit
                   <BsPlusCircle size={15} />
                 </button>
               </div>
@@ -1404,12 +1189,12 @@ const BonLivrCreate = () => {
               <div className="row">
                 <div className="col-md-6">
                   <div className="form-group">
-                    <label className="form-label">Client:</label>
-                    <p className="fw-bold">{customerName || "Non spécifié"}</p>
+                    <label className="form-label">Fournisseur:</label>
+                    <p className="fw-bold">{supplierName || "Non spécifié"}</p>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Téléphone:</label>
-                    <p className="fw-bold">{customerPhone || "Non spécifié"}</p>
+                    <p className="fw-bold">{supplierPhone || "Non spécifié"}</p>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Statut:</label>
@@ -1418,38 +1203,24 @@ const BonLivrCreate = () => {
                         ?.label || "Brouillon"}
                     </p>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Type de Paiement:</label>
-                    <p className="fw-bold">
-                      {paymentTypeOptions.find(
-                        (opt) => opt.value === paymentType,
-                      )?.label || "Non spécifié"}
-                    </p>
-                  </div>
                 </div>
                 <div className="col-md-6 text-end">
                   <div className="row justify-content-end">
                     <div className="col-auto">
                       <p className="mb-1">Sous-total:</p>
                       <p className="mb-1 text-danger">Remise:</p>
-                      <p className="mb-1 fw-bold">Total après remise:</p>
-                      <p className="mb-1">Avancement:</p>
-                      <p className="mb-1 fw-bold border-top pt-1">
-                        Reste à payer:
-                      </p>
+                      <p className="mb-1">Total HT:</p>
+                      <p className="mb-1">TVA ({tvaRate}%):</p>
+                      <p className="mb-1 fw-bold">Total TTC:</p>
                     </div>
                     <div className="col-auto text-end">
                       <p className="mb-1">{subTotal.toFixed(2)} Dh</p>
                       <p className="mb-1 text-danger">
                         -{discount.toFixed(2)} Dh
                       </p>
-                      <p className="mb-1 fw-bold">
-                        {totalAfterDiscount.toFixed(2)} Dh
-                      </p>
-                      <p className="mb-1">{advancementPrice.toFixed(2)} Dh</p>
-                      <p className="mb-1 fw-bold border-top pt-1">
-                        {remainingAmount.toFixed(2)} Dh
-                      </p>
+                      <p className="mb-1">{totalHT.toFixed(2)} Dh</p>
+                      <p className="mb-1">{tvaAmount.toFixed(2)} Dh</p>
+                      <p className="mb-1 fw-bold">{totalTTC.toFixed(2)} Dh</p>
                     </div>
                   </div>
                 </div>
@@ -1460,25 +1231,56 @@ const BonLivrCreate = () => {
             <div className="px-4 pb-4">
               <div className="form-group">
                 <label htmlFor="InvoiceNote" className="form-label">
-                  Description De Bon Livraison:
+                  Description / Notes:
                 </label>
                 <textarea
-                  rows={6}
+                  rows={4}
                   className="form-control"
                   id="InvoiceNote"
-                  placeholder="It was a pleasure working with you and your team. We hope you will keep us in mind for future metal construction projects. Thank You!"
+                  placeholder="Notes concernant cette facture d'achat..."
                   value={invoiceNote}
                   onChange={(e) => setInvoiceNote(e.target.value)}
                 />
               </div>
 
+              <div className="row mt-3">
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="ice">
+                      ICE
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="ice"
+                      placeholder="ICE..."
+                      value={ice}
+                      onChange={(e) => setIce(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-3">
+                    <label className="form-label" htmlFor="ste">
+                      STE
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="ste"
+                      placeholder="Ste..."
+                      value={ste}
+                      onChange={(e) => setSte(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="d-flex justify-content-end gap-3 mt-4">
                 {createdInvoiceId && (
-                  <>
-                    <button className="btn btn-secondary" onClick={resetForm}>
-                      Nouvelle Bon Livraison
-                    </button>
-                  </>
+                  <button className="btn btn-secondary" onClick={resetForm}>
+                    Nouvelle Facture
+                  </button>
                 )}
                 <button
                   className={`btn ${Object.keys(priceAlerts).length > 0 ? "btn-warning" : "btn-primary"}`}
@@ -1493,7 +1295,7 @@ const BonLivrCreate = () => {
                       Créer avec alertes
                     </>
                   ) : (
-                    "Créer Bon Livraison"
+                    "Créer Facture d'Achat"
                   )}
                 </button>
               </div>
@@ -1505,4 +1307,4 @@ const BonLivrCreate = () => {
   );
 };
 
-export default BonLivrCreate;
+export default FactureAchatCreate;

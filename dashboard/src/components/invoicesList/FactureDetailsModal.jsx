@@ -28,6 +28,14 @@ import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 const MySwal = withReactContent(Swal);
 
+// Function to round to next multiple of 3
+const roundToNextMultipleOfThree = (value) => {
+  const numValue = parseFloat(value);
+  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (numValue % 3 === 0) return numValue;
+  return Math.ceil(numValue / 3) * 3;
+};
+
 // Custom ClearIndicator for react-select
 const ClearIndicator = (props) => {
   const {
@@ -71,7 +79,8 @@ const ProductOption = (props) => {
     >
       <div className="fw-bold">{data.label}</div>
       <div className={`small ${isSelected ? "text-white" : "text-muted"}`}>
-        Stock: {produit.qty || 0} | Prix: {produit.prix_vente} DH{priceRangeInfo}
+        Stock: {produit.qty || 0} | Prix: {produit.prix_vente} DH
+        {priceRangeInfo}
       </div>
       {produit.surface > 0 && (
         <div className={`small ${isSelected ? "text-white" : "text-muted"}`}>
@@ -255,8 +264,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       code: "",
       designation: "",
       quantity: 1,
-      v1: 1,
-      v2: 1,
       unitPrice: 0,
       remise_ligne: 0,
       totalPrice: 0,
@@ -399,9 +406,9 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     }
   };
 
-  // Calculate item total
+  // Calculate item total - simple qty × unitPrice
   const calculateItemTotal = (item) => {
-    const baseTotal = item.quantity * item.v1 * item.v2 * item.unitPrice;
+    const baseTotal = item.quantity * item.unitPrice;
     const lineDiscount = item.remise_ligne || 0;
     return Math.max(0, baseTotal - lineDiscount);
   };
@@ -421,13 +428,14 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   };
 
   const discount = calculateDiscount();
-  const totalAfterDiscountHT = Math.max(0, subTotal - discount);
+  const totalHT = Math.max(0, subTotal - discount);
 
-  // TVA Calculation
-  const tvaAmount = (totalAfterDiscountHT * formData.tvaRate) / 100;
-  const totalTTC = formData.includeTvaInPrice
-    ? totalAfterDiscountHT + tvaAmount
-    : totalAfterDiscountHT;
+  // TVA = Total HT × (TVA_rate / 100)
+  const tvaRate = parseFloat(formData.tvaRate) || 20;
+  const tvaAmount = totalHT * (tvaRate / 100);
+
+  // Total TTC = Total HT + TVA
+  const totalTTC = totalHT + tvaAmount;
 
   // Calculate total advancement from advancements array
   const totalAdvancement = formData.advancements.reduce(
@@ -451,8 +459,8 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       [field]: field === "articleName" ? value : parseFloat(value) || 0,
     };
 
-    // Recalculate total price when dimensions change
-    if (["quantity", "v1", "v2", "unitPrice", "remise_ligne"].includes(field)) {
+    // Recalculate total price when quantity or unitPrice changes
+    if (["quantity", "unitPrice", "remise_ligne"].includes(field)) {
       updatedItems[index].totalPrice = calculateItemTotal(updatedItems[index]);
     }
 
@@ -597,7 +605,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         // Financials
         subTotal: subTotal,
         discountAmount: discount,
-        totalHT: totalAfterDiscountHT,
+        totalHT: totalHT,
         totalTTC: totalTTC,
         advancement: totalAdvancement,
         remainingAmount: remainingAmount,
@@ -683,16 +691,69 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     };
 
     const printWindow = window.open("", "_blank");
-    const printContent = `
-<!DOCTYPE html>
+    if (!printWindow) {
+      alert("Veuillez autoriser les popups pour imprimer");
+      return;
+    }
+
+    const itemsHtml = formData.items
+      .map((item) => `
+        <tr>
+          <td>${item.produit?.reference || item.code || "-"}</td>
+          <td>${item.produit?.designation || item.designation || "-"}</td>
+          <td>${parseFloat(item.quantity).toFixed(2)}</td>
+          <td>${parseFloat(item.v1).toFixed(2)}</td>
+          <td>${parseFloat(item.v2).toFixed(2)}</td>
+          <td>${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
+          <td>${parseFloat(item.totalPrice).toFixed(2)} Dh</td>
+        </tr>
+      `)
+      .join("");
+
+    const advancementsHtml = formData.advancements && formData.advancements.length > 0
+      ? `
+        <div class="advancements">
+          <h3>Historique des Avancements</h3>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date Paiement</th>
+                <th>Montant</th>
+                <th>Méthode</th>
+                <th>Référence</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${formData.advancements
+                .map((a) => `
+                  <tr>
+                    <td>${formatDate(a.paymentDate)}</td>
+                    <td>${parseFloat(a.amount).toFixed(2)} Dh</td>
+                    <td>${a.paymentMethod}</td>
+                    <td>${a.reference || "-"}</td>
+                    <td>${a.notes || "-"}</td>
+                  </tr>
+                `)
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      `
+      : "";
+
+    const printContent = `<!DOCTYPE html>
 <html>
 <head>
   <title>Facture ${invoice.invoiceNumber}</title>
+  <meta charset="UTF-8">
   <style>
+    * { box-sizing: border-box; }
     body {
       font-family: Arial, sans-serif;
       font-size: 10px;
-      margin: 20px;
+      margin: 0;
+      padding: 10mm;
       color: #333;
     }
     .header {
@@ -707,76 +768,41 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       flex-wrap: wrap;
       margin-bottom: 20px;
     }
-    .info-block {
-      flex: 1;
-      min-width: 220px;
-    }
-    .info-block p {
-      margin: 3px 0;
-    }
+    .info-block { flex: 1; min-width: 220px; }
+    .info-block p { margin: 3px 0; }
     .table {
       width: 100%;
       border-collapse: collapse;
       margin: 15px 0;
-      table-layout: fixed;
     }
     .table th, .table td {
       border: 1px solid #ddd;
       padding: 6px;
       text-align: left;
-      word-wrap: break-word;
-      white-space: normal;
-      vertical-align: top;
     }
-    .table th {
-      background-color: #f5f5f5;
-    }
+    .table th { background-color: #f5f5f5; }
     .totals {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
       margin-top: 20px;
     }
-    .totals p {
-      margin: 2px 0;
-    }
-    .advancements {
-      margin-top: 25px;
-    }
-    .advancements h3 {
-      margin-bottom: 5px;
-      font-size: 12px;
-    }
-    .notes {
-      margin-top: 20px;
-    }
-   .footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  border-top: 1px solid #333;
-  padding-top: 10px;
-  text-align: center;
-  font-size: 9px;
-  color: #444;
-  background: white;
-}
-    .tva-badge {
-      background-color: #e9ecef;
-      padding: 2px 6px;
-      border-radius: 4px;
+    .totals p { margin: 2px 0; }
+    .notes { margin-top: 20px; }
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      border-top: 1px solid #333;
+      padding: 8px 10px;
+      text-align: center;
       font-size: 9px;
+      color: #444;
+      background: white;
     }
-@page {
-  margin: 0;
-  size: A4;
-}
-
-@media print {
-  body { margin: 15mm; }
-  .no-print { display: none; }
-}
+    @page { margin: 0; size: A4; }
+    @media print { body { margin: 10mm; } }
   </style>
 </head>
 <body>
@@ -784,14 +810,14 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     <h2 style="margin: 0;">FACTURE</h2>
     <h3 style="margin: 5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
     <p>VENTE TOUS TYPE DE VERRE — Import / Export</p>
-    <p>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+    <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
   </div>
 
   <div class="company-info">
     <div class="info-block">
-      <p><strong>Sté RachidGlass S.A.R.L A.U</strong></p>
+      <p><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
       <p>VENTE TOUS TYPE DE VERRE — Import / Export</p>
-      <p>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+      <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
       <p>Email: ibaghatrachid83@gmail.com</p>
       <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</p>
       <p>ICE: 003013206000054</p>
@@ -822,84 +848,23 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         <th>Total HT</th>
       </tr>
     </thead>
-    <tbody>
-      ${formData.items
-        .map(
-          (item) => `
-        <tr>
-          <td>${item.produit?.reference || item.code || "-"}</td>
-          <td>${item.produit?.designation || item.designation || "-"}</td>
-          <td>${parseFloat(item.quantity).toFixed(2)}</td>
-          <td>${parseFloat(item.v1).toFixed(2)}</td>
-          <td>${parseFloat(item.v2).toFixed(2)}</td>
-          <td>${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
-          <td>${parseFloat(item.totalPrice).toFixed(2)} Dh</td>
-        </tr>
-      `,
-        )
-        .join("")}
-    </tbody>
+    <tbody>${itemsHtml}</tbody>
   </table>
 
   <div class="totals">
     <p><strong>Sous-total HT:</strong> ${subTotal.toFixed(2)} Dh</p>
-    ${
-      discount > 0
-        ? `<p><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>`
-        : ""
-    }
-    <p><strong>Total HT:</strong> ${totalAfterDiscountHT.toFixed(2)} Dh</p>
+    ${discount > 0 ? `<p><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
+    <p><strong>Total HT:</strong> ${totalHT.toFixed(2)} Dh</p>
     <p><strong>TVA (${formData.tvaRate}%):</strong> +${tvaAmount.toFixed(2)} Dh</p>
     <p style="font-weight:bold; font-size:12px;"><strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh</p>
-    ${
-      totalAdvancement > 0
-        ? `<p><strong>Avancement:</strong> -${totalAdvancement.toFixed(2)} Dh</p>
-           <p style="font-weight:bold; border-top:1px solid #333; padding-top:5px;">
-             Reste à payer: ${remainingAmount.toFixed(2)} Dh
-           </p>`
-        : `<p style="font-weight:bold; border-top:1px solid #333; padding-top:5px;">
-             Reste à payer: ${remainingAmount.toFixed(2)} Dh
-           </p>`
-    }
+    ${totalAdvancement > 0 ? `<p><strong>Avancement:</strong> -${totalAdvancement.toFixed(2)} Dh</p>` : ""}
+    <p style="font-weight:bold; border-top:1px solid #333; padding-top:5px;">
+      Reste à payer: ${remainingAmount.toFixed(2)} Dh
+    </p>
   </div>
 
-  ${
-    formData.advancements && formData.advancements.length > 0
-      ? `
-    <div class="advancements">
-      <h3>Historique des Avancements</h3>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Date Paiement</th>
-            <th>Montant</th>
-            <th>Méthode</th>
-            <th>Référence</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${formData.advancements
-            .map(
-              (a) => `
-            <tr>
-              <td>${formatDate(a.paymentDate)}</td>
-              <td>${parseFloat(a.amount).toFixed(2)} Dh</td>
-              <td>${a.paymentMethod}</td>
-              <td>${a.reference || "-"}</td>
-              <td>${a.notes || "-"}</td>
-            </tr>
-          `,
-            )
-            .join("")}
-        </tbody>
-      </table>
-    </div>
-  `
-      : ""
-  }
+  ${advancementsHtml}
 
-  ${formData.notes ? `<div class="notes"><strong>Notes:</strong> ${formData.notes}</div>` : ""}
 
   <div class="footer">
     <p>
@@ -912,20 +877,19 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       Email: ibaghatrachid83@gmail.com
     </p>
     <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-  
   </div>
 
+  <script>
+    window.onload = function() {
+      window.print();
+    };
+  </script>
 </body>
-</html>
-`;
+</html>`;
 
+    printWindow.document.open();
     printWindow.document.write(printContent);
     printWindow.document.close();
-    printWindow.focus();
-
-    setTimeout(() => {
-      printWindow.print();
-    }, 500);
   };
 
   const generateAndDownloadPDF = async () => {
@@ -969,9 +933,9 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
         <div>
-          <p style="margin:2px 0;"><strong>Sté RachidGlass S.A.R.L A.U</strong></p>
+          <p style="margin:2px 0;"><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
           <p style="margin:2px 0;">VENTE TOUS TYPE DE VERRE — Import / Export</p>
-          <p style="margin:2px 0;">Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+          <p style="margin:2px 0;">Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
           <p style="margin:2px 0;">Email: ibaghatrachid83@gmail.com</p>
           <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</p>
           <p style="margin:2px 0;">ICE: 003013206000054</p>
@@ -1023,7 +987,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       <div style="text-align:right; margin-top:20px;">
         <p style="margin:2px 0;"><strong>Sous-total HT:</strong> ${subTotal.toFixed(2)} Dh</p>
         ${discount > 0 ? `<p style="margin:2px 0;"><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
-        <p style="margin:2px 0;"><strong>Total HT:</strong> ${totalAfterDiscountHT.toFixed(2)} Dh</p>
+        <p style="margin:2px 0;"><strong>Total HT:</strong> ${totalHT.toFixed(2)} Dh</p>
         <p style="margin:2px 0;"><strong>TVA (${formData.tvaRate}%):</strong> +${tvaAmount.toFixed(2)} Dh</p>
         <p style="font-size:13px; font-weight:bold; color:#2c5aa0; margin:2px 0;">
           <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh
@@ -1076,7 +1040,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           : ""
       }
 
-      ${formData.notes ? `<div style="margin-top:15px;"><strong>Notes:</strong> ${formData.notes}</div>` : ""}
 
    <div style="
   position: absolute;
@@ -1145,7 +1108,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} toggle={toggle} size="xl">
+    <Modal isOpen={isOpen} toggle={toggle} size="xl" style={{ maxWidth: "90vw" }}>
       <ModalHeader toggle={toggle}>
         Facture #{invoice.invoiceNumber}
         <Badge color={getStatusBadge(formData.status)} className="ms-2">
@@ -1524,8 +1487,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                     <th>Code</th>
                     <th>Désignation</th>
                     <th>Qty</th>
-                    <th>Longueur</th>
-                    <th>Largeur</th>
                     <th>Prix/Unité</th>
                     <th>Total HT</th>
                     <th></th>
@@ -1557,7 +1518,9 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                                 item.produit_id
                                   ? {
                                       value: item.produit_id,
-                                      label: item.designation || `${item.code || ""} - ${item.designation || ""}`,
+                                      label:
+                                        item.designation ||
+                                        `${item.code || ""} - ${item.designation || ""}`,
                                       data: item.produit || {
                                         reference: item.code,
                                         designation: item.designation,
@@ -1567,7 +1530,9 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                                     }
                                   : null
                               }
-                              onChange={(opt) => handleProductSelect(opt, index)}
+                              onChange={(opt) =>
+                                handleProductSelect(opt, index)
+                              }
                               placeholder="Rechercher produit..."
                               isClearable
                               isLoading={loadingProduits}
@@ -1589,7 +1554,8 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                             />
                             {item.produit && (
                               <small className="text-muted d-block mt-1">
-                                Stock: {item.produit.qty || 0} | Prix: {item.unitPrice?.toFixed(2) || "0.00"} DH
+                                Stock: {item.produit.qty || 0} | Prix:{" "}
+                                {item.unitPrice?.toFixed(2) || "0.00"} DH
                               </small>
                             )}
                           </>
@@ -1606,34 +1572,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                             handleItemChange(index, "quantity", e.target.value)
                           }
                           min="0"
-                          step="0.01"
-                        />
-                      </td>
-
-                      {/* Longueur (v1) - Input */}
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v1}
-                          onChange={(e) =>
-                            handleItemChange(index, "v1", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
-                      </td>
-
-                      {/* Largeur (v2) - Input */}
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v2}
-                          onChange={(e) =>
-                            handleItemChange(index, "v2", e.target.value)
-                          }
-                          min="0.01"
                           step="0.01"
                         />
                       </td>
@@ -1723,13 +1661,11 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                   )}
                   <div className="d-flex justify-content-between">
                     <span>Total HT:</span>
-                    <span>{totalAfterDiscountHT.toFixed(2)} Dh</span>
+                    <span>{totalHT.toFixed(2)} Dh</span>
                   </div>
                   <div className="d-flex justify-content-between">
-                    <span>TVA ({formData.tvaRate}%):</span>
-                    <span className="text-info">
-                      +{tvaAmount.toFixed(2)} Dh
-                    </span>
+                    <span>TVA (20%):</span>
+                    <span className="text-info">20%</span>
                   </div>
                   <div className="d-flex justify-content-between fw-bold">
                     <span>Total TTC:</span>

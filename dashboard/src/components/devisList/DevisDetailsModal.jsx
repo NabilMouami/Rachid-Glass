@@ -29,6 +29,14 @@ import { components } from "react-select";
 
 const MySwal = withReactContent(Swal);
 
+// Function to round to next multiple of 3
+const roundToNextMultipleOfThree = (value) => {
+  const numValue = parseFloat(value);
+  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (numValue % 3 === 0) return numValue;
+  return Math.ceil(numValue / 3) * 3;
+};
+
 // Custom ClearIndicator for react-select
 const ClearIndicator = (props) => {
   const {
@@ -72,7 +80,8 @@ const ProductOption = (props) => {
     >
       <div className="fw-bold">{data.label}</div>
       <div className={`small ${isSelected ? "text-white" : "text-muted"}`}>
-        Stock: {produit.qty || 0} | Prix: {produit.prix_vente} DH{priceRangeInfo}
+        Stock: {produit.qty || 0} | Prix: {produit.prix_vente} DH
+        {priceRangeInfo}
       </div>
       {produit.surface > 0 && (
         <div className={`small ${isSelected ? "text-white" : "text-muted"}`}>
@@ -99,6 +108,8 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
+  const [statusKey, setStatusKey] = useState(0); // Force re-render of status select
+  const statusRef = useRef(devis?.status || "brouillon"); // Store original status
   const [formData, setFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -111,7 +122,13 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     lignes: [],
   });
 
-  console.log("Lignes: " + JSON.stringify(formData.lignes));
+  // Sync ref with current status when modal opens
+  useEffect(() => {
+    if (isOpen && devis) {
+      statusRef.current = devis.status;
+      setFormData((prev) => ({ ...prev, status: devis.status }));
+    }
+  }, [isOpen, devis]);
 
   // Fetch products
   useEffect(() => {
@@ -175,7 +192,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
   // Handle product selection for a ligne
   const handleProductSelect = (selectedOption, index) => {
     const updatedLignes = [...formData.lignes];
-    
+
     if (!selectedOption) {
       // Clear product selection
       updatedLignes[index] = {
@@ -228,9 +245,14 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
             quantite: parseFloat(ligne.quantite) || 1,
             v1: parseFloat(ligne.v1) || 1,
             v2: parseFloat(ligne.v2) || 1,
-            v3: 1, // Default value since not in API
+            v3: 1,
             prix_unitaire: parseFloat(ligne.prix_unitaire) || 0,
-            total_ligne: parseFloat(ligne.total_ligne) || 0,
+            total_ligne: calculateItemTotal({
+              quantite: parseFloat(ligne.quantite) || 1,
+              v1: parseFloat(ligne.v1) || 1,
+              v2: parseFloat(ligne.v2) || 1,
+              prix_unitaire: parseFloat(ligne.prix_unitaire) || 0,
+            }),
             produit_id: ligne.produit_id,
             devis_id: ligne.devis_id,
             // Store the full produit object for reference
@@ -277,10 +299,10 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     }
   };
 
-  // Calculate item total - matching your backend logic
   const calculateItemTotal = (ligne) => {
-    // Backend formula: quantite * v1 * v2 * prix_unitaire
-    return ligne.quantite * ligne.v1 * ligne.v2 * ligne.prix_unitaire;
+    const calcV1 = roundToNextMultipleOfThree(parseFloat(ligne.v1) || 0) / 100;
+    const calcV2 = roundToNextMultipleOfThree(parseFloat(ligne.v2) || 0) / 100;
+    return (parseFloat(ligne.quantite) || 0) * calcV1 * calcV2 * (parseFloat(ligne.prix_unitaire) || 0);
   };
 
   // Calculate all totals
@@ -331,7 +353,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
   // Delete a ligne
   const handleDeleteLigne = async (index) => {
     const ligne = formData.lignes[index];
-    
+
     if (ligne.id && !String(ligne.id).startsWith("temp-")) {
       const confirm = await MySwal.fire({
         title: "Supprimer cet article?",
@@ -477,14 +499,16 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         });
 
         if (!confirmConvert.isConfirmed) {
-          setFormData((prev) => ({ ...prev, status: devis.status }));
           return;
         }
       }
 
-      // Convert to invoice immediately
-      await convertToInvoice();
-    } else if (newStatus === "transformé_bon_livraison" && !devis.convertedToBonLivraison) {
+      // Try conversion - do NOT update formData status until successful
+      await convertToInvoiceWithResult();
+    } else if (
+      newStatus === "transformé_bon_livraison" &&
+      !devis.convertedToBonLivraison
+    ) {
       // Check if devis is accepted before converting
       if (devis.status !== "accepté") {
         const confirmConvert = await MySwal.fire({
@@ -499,26 +523,28 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         });
 
         if (!confirmConvert.isConfirmed) {
-          setFormData((prev) => ({ ...prev, status: devis.status }));
           return;
         }
       }
 
-      // Convert to bon livraison immediately
-      await convertToBonLivraison();
+      // Try conversion
+      await convertToBonLivraisonWithResult();
     } else {
       // For other status changes, just update the form
       handleInputChange("status", newStatus);
     }
   };
 
-  const convertToInvoice = async () => {
+  // Returns true if successful, false if failed
+  const convertToInvoiceWithResult = async () => {
     try {
       setIsSubmitting(true);
       const response = await axios.post(
         `${config_url}/api/devis/${devis.id}/convert-to-invoice`,
       );
 
+      // Success - update status and close modal
+      handleInputChange("status", "transformé_facture");
       topTost("Devis converti en facture avec succès!", "success");
 
       if (onUpdate) {
@@ -526,6 +552,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       }
 
       toggle();
+      return true;
     } catch (error) {
       console.error("Error converting devis to invoice:", error);
       const errorMessage =
@@ -533,20 +560,22 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         "Erreur lors de la conversion en facture";
       topTost(errorMessage, "error");
 
-      // Reset status on error
-      setFormData((prev) => ({ ...prev, status: devis.status }));
+      // Force re-render to reset select to original value
+      setStatusKey((prev) => prev + 1);
+      return false;
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const convertToBonLivraison = async () => {
+  const convertToBonLivraisonWithResult = async () => {
     try {
       setIsSubmitting(true);
       const response = await axios.post(
         `${config_url}/api/devis/${devis.id}/convert-to-bon-livraison`,
       );
 
+      // Success - update status and close modal
+      handleInputChange("status", "transformé_bon_livraison");
       topTost("Devis converti en bon de livraison avec succès!", "success");
 
       if (onUpdate) {
@@ -554,6 +583,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       }
 
       toggle();
+      return true;
     } catch (error) {
       console.error("Error converting devis to bon livraison:", error);
       const errorMessage =
@@ -561,7 +591,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         "Erreur lors de la conversion en bon de livraison";
       topTost(errorMessage, "error");
 
-      setFormData((prev) => ({ ...prev, status: devis.status }));
+      // Force re-render to reset select to original value
+      setStatusKey((prev) => prev + 1);
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -674,9 +706,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
 
   <div class="company-info">
     <div class="info-block">
-      <p><strong>Sté RachidGlass S.A.R.L A.U</strong></p>
+      <p><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
       <p>VENTE TOUS TYPE DE VERRE — Import / Export</p>
-      <p>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+      <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
       <p>Email: ibaghatrachid83@gmail.com</p>
       <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</p>
       <p>ICE: 003013206000054</p>
@@ -703,6 +735,8 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     <th>Qté</th>
     <th>Long.</th>
     <th>Larg.</th>
+    <th>Mtre Lin.</th>
+    <th>Surface</th>
     <th>Prix U.</th>
     <th>Total</th>
   </tr>
@@ -717,6 +751,8 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       <td>${parseFloat(ligne.quantite).toFixed(2)}</td>
       <td>${parseFloat(ligne.v1).toFixed(2)}</td>
       <td>${parseFloat(ligne.v2).toFixed(2)}</td>
+      <td>${(((parseFloat(ligne.quantite) || 0) * (parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
+      <td>${(((parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
       <td>${parseFloat(ligne.prix_unitaire).toFixed(2)} Dh</td>
       <td>${parseFloat(ligne.total_ligne).toFixed(2)} Dh</td>
     </tr>
@@ -785,14 +821,14 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         <h1 style="margin:0; color:#2c5aa0;">DEVIS</h1>
         <h3 style="margin:5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
         <p style="margin:2px 0;">VENTE TOUS TYPE DE VERRE — Import / Export</p>
-        <p style="font-size:10px; margin:2px 0;">Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+        <p style="font-size:10px; margin:2px 0;">Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
         <div>
-          <p style="margin:2px 0;"><strong>Sté RachidGlass S.A.R.L A.U</strong></p>
+          <p style="margin:2px 0;"><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
           <p style="margin:2px 0;">VENTE TOUS TYPE DE VERRE — Import / Export</p>
-          <p style="margin:2px 0;">Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+          <p style="margin:2px 0;">Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
           <p style="margin:2px 0;">Email: ibaghatrachid83@gmail.com</p>
           <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</p>
           <p style="margin:2px 0;">ICE: 003013206000054</p>
@@ -822,6 +858,8 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     <th style="padding:6px; border:1px solid #2c5aa0;">QTÉ</th>
     <th style="padding:6px; border:1px solid #2c5aa0;">LONG.</th>
     <th style="padding:6px; border:1px solid #2c5aa0;">LARG.</th>
+    <th style="padding:6px; border:1px solid #2c5aa0;">Mtre Lin.</th>
+    <th style="padding:6px; border:1px solid #2c5aa0;">Surface</th>
     <th style="padding:6px; border:1px solid #2c5aa0;">P.U</th>
     <th style="padding:6px; border:1px solid #2c5aa0;">TOTAL</th>
   </tr>
@@ -836,6 +874,8 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         <td style="border:1px solid #ddd; text-align:center; padding:5px;">${ligne.quantite}</td>
         <td style="border:1px solid #ddd; text-align:center; padding:5px;">${ligne.v1}</td>
         <td style="border:1px solid #ddd; text-align:center; padding:5px;">${ligne.v2}</td>
+        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(ligne.quantite) || 0) * (parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
+        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
         <td style="border:1px solid #ddd; text-align:right; padding:5px;">${ligne.prix_unitaire.toFixed(2)} Dh</td>
         <td style="border:1px solid #ddd; text-align:right; padding:5px;">${ligne.total_ligne.toFixed(2)} Dh</td>
       </tr>`,
@@ -918,7 +958,12 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     }
   };
   return (
-    <Modal isOpen={isOpen} toggle={toggle} size="xl">
+    <Modal
+      isOpen={isOpen}
+      toggle={toggle}
+      size="xl"
+      style={{ maxWidth: "90vw" }}
+    >
       <ModalHeader toggle={toggle}>
         Devis #{devis.devisNumber}
         <Badge color={getStatusBadge(formData.status)} className="ms-2">
@@ -981,30 +1026,25 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
             <div className="form-group mb-3">
               <label className="form-label">Statut *</label>
               <select
+                key={`status-select-${statusKey}`}
                 className="form-control"
-                value={formData.status}
+                defaultValue={statusRef.current}
                 onChange={(e) => handleStatusChange(e.target.value)}
-                disabled={isSubmitting || (devis.convertedToInvoice && devis.convertedToBonLivraison)}
+                disabled={
+                  isSubmitting ||
+                  (devis.convertedToInvoice && devis.convertedToBonLivraison)
+                }
               >
                 {statusOptions.map((option) => (
-                  <option
-                    key={option.value}
-                    value={option.value}
-                    disabled={
-                      (option.value === "transformé_facture" &&
-                        devis.convertedToInvoice) ||
-                      (option.value === "transformé_bon_livraison" &&
-                        devis.convertedToBonLivraison)
-                    }
-                  >
+                  <option key={option.value} value={option.value}>
                     {option.label}
                     {option.value === "transformé_facture" &&
                     devis.convertedToInvoice
                       ? " (Déjà converti)"
                       : option.value === "transformé_bon_livraison" &&
-                        devis.convertedToBonLivraison
-                      ? " (Déjà converti)"
-                      : ""}
+                          devis.convertedToBonLivraison
+                        ? " (Déjà converti)"
+                        : ""}
                   </option>
                 ))}
               </select>
@@ -1132,7 +1172,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
                                 ligne.produit_id
                                   ? {
                                       value: ligne.produit_id,
-                                      label: ligne.articleName || `${ligne.reference || ""} - ${ligne.articleName || ""}`,
+                                      label:
+                                        ligne.articleName ||
+                                        `${ligne.reference || ""} - ${ligne.articleName || ""}`,
                                       data: ligne.produit || {
                                         reference: ligne.reference,
                                         designation: ligne.articleName,
@@ -1142,7 +1184,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
                                     }
                                   : null
                               }
-                              onChange={(opt) => handleProductSelect(opt, index)}
+                              onChange={(opt) =>
+                                handleProductSelect(opt, index)
+                              }
                               placeholder="Rechercher produit..."
                               isClearable
                               isLoading={loadingProduits}
@@ -1156,15 +1200,16 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
                                   minHeight: "38px",
                                   zIndex: 1,
                                 }),
-                                menu: (base) => ({ 
-                                  ...base, 
+                                menu: (base) => ({
+                                  ...base,
                                   zIndex: 1050,
                                 }),
                               }}
                             />
                             {ligne.produit && (
                               <small className="text-muted d-block mt-1">
-                                Stock: {ligne.produit.qty || 0} | Prix: {ligne.prix_unitaire?.toFixed(2) || "0.00"} DH
+                                Stock: {ligne.produit.qty || 0} | Prix:{" "}
+                                {ligne.prix_unitaire?.toFixed(2) || "0.00"} DH
                               </small>
                             )}
                           </>
@@ -1213,7 +1258,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
                         />
                       </td>
 
-                      {/* Prix/Unité - Input */}
+                      {/* prix/Unité - Input */}
                       <td>
                         <input
                           type="number"

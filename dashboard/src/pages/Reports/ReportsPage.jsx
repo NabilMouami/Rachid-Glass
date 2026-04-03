@@ -6,96 +6,34 @@ import { reportsService } from "../../services/reportsService";
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS - Simple formatting (display as-is from API)
 // ─────────────────────────────────────────────────────────────────────────────
-const fmtPrice = (n) => {
+const fmtPrice = (n, decimals = 2) => {
   const num = parseFloat(n);
-  if (isNaN(num)) return "0.00";
-  return num.toFixed(2);
+  if (isNaN(num)) return decimals === 0 ? "0" : "0.00";
+  return decimals === 0 ? Math.round(num).toString() : num.toFixed(decimals);
 };
 
 const fmtPriceMAD = (n) => `${fmtPrice(n)} DH`;
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString("fr-MA") : "—");
-const formatDateForDisplay = (dateString) => {
-  if (!dateString) return "";
-  // Convert yyyy-mm-dd to dd/mm/yyyy for display
-  const [year, month, day] = dateString.split("-");
-  if (year && month && day) {
-    return `${day}/${month}/${year}`;
-  }
-  return dateString;
-};
-
-const formatDateForInput = (dateString) => {
-  if (!dateString) return "";
-  // Convert dd/mm/yyyy to yyyy-mm-dd for input value
-  const [day, month, year] = dateString.split("/");
-  if (day && month && year) {
-    return `${year}-${month}-${day}`;
-  }
-  return dateString;
-};
-
 const today = () => {
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`; // Return ISO format for internal use
+  return `${year}-${month}-${day}`;
 };
 
-const yearStart = () => {
-  return `${new Date().getFullYear()}-01-01`; // Return ISO format for internal use
-};
+const yearStart = () => `${new Date().getFullYear()}-01-01`;
 
-// Custom DateInput component
-const DateInput = ({ value, onChange, label }) => {
-  // Store both display format and input format
-  const [displayValue, setDisplayValue] = useState(formatDateForDisplay(value));
 
-  // Update display value when prop value changes
-  useEffect(() => {
-    setDisplayValue(formatDateForDisplay(value));
-  }, [value]);
-
-  const handleDateChange = (e) => {
-    const inputValue = e.target.value; // This will be yyyy-mm-dd
-    onChange(e); // Pass the event up
-    setDisplayValue(formatDateForDisplay(inputValue));
-  };
-
-  return (
-    <div style={{ position: "relative", display: "inline-block" }}>
-      <input
-        type="date"
-        className="rp-date-input"
-        value={formatDateForInput(value)} // Convert to yyyy-mm-dd for input
-        onChange={handleDateChange}
-        style={{
-          width: "100%",
-          // Hide the actual date text but keep the picker functional
-          color: "transparent",
-          position: "relative",
-          zIndex: 1,
-        }}
-      />
-      <input
-        type="text"
-        className="rp-date-input"
-        value={displayValue}
-        readOnly
-        placeholder="dd/mm/yyyy"
-        style={{
-          position: "absolute",
-          left: 0,
-          top: 0,
-          width: "100%",
-          backgroundColor: "white",
-          pointerEvents: "none", // Allows clicks to pass through to the date input
-          border: "1px solid #ccc",
-        }}
-      />
-    </div>
-  );
-};
+// Custom DateInput component — single clean date input
+const DateInput = ({ value, onChange }) => (
+  <input
+    type="date"
+    className="rp-date-input"
+    value={value || ""}
+    onChange={onChange}
+  />
+);
 
 const CHART = {
   fontFamily: "Syne, sans-serif",
@@ -110,6 +48,7 @@ const TABS = [
   { id: "bls", label: "Bons de Livraison", icon: "🚚" },
   { id: "revenue", label: "Chiffre d'Affaires", icon: "📈" },
   { id: "payments", label: "État Paiements", icon: "💳" },
+  { id: "clients", label: "Clients", icon: "👥" },
   { id: "products", label: "Produits", icon: "📦" },
   { id: "comparison", label: "Comparaison", icon: "⚖️" },
 ];
@@ -1621,12 +1560,14 @@ const PaymentsTab = ({ data, loading }) => {
                         <tr key={f.id}>
                           <td className="fw-semibold">{f.invoiceNumber}</td>
                           <td>{f.client?.nom_complete || "—"}</td>
-                          <td>{fmtDate(f.date_facturation)}</td>
+                          {/* FIX: API field is issueDate, not date_facturation */}
+                          <td>{fmtDate(f.issueDate)}</td>
                           <td className="text-end">
                             {fmtPriceMAD(f.total_ttc)}
                           </td>
+                          {/* FIX: API field is remaining_amount, not total_restant */}
                           <td className="text-end text-danger fw-bold">
-                            {fmtPriceMAD(f.total_restant)}
+                            {fmtPriceMAD(f.remaining_amount)}
                           </td>
                           <td className="text-center">
                             <Badge status={f.status} />
@@ -1670,17 +1611,13 @@ const PaymentsTab = ({ data, loading }) => {
                     <tbody>
                       {bucket.items.map((bl) => (
                         <tr key={bl.id}>
-                          {/* ✅ FIXED: Changed from num_bon to deliveryNumber */}
-                          <td className="fw-semibold">
-                            {bl.deliveryNumber}
-                          </td>
+                          <td className="fw-semibold">{bl.deliveryNumber}</td>
                           <td>{bl.client?.nom_complete || "—"}</td>
                           <td>{fmtDate(bl.issueDate)}</td>
-                          <td className="text-end">
-                            {fmtPriceMAD(bl.total_ttc)}
-                          </td>
+                          <td className="text-end">{fmtPriceMAD(bl.total)}</td>
+                          {/* FIX: backend enriches BLs with montant_restant = full total */}
                           <td className="text-end text-danger fw-bold">
-                            {fmtPriceMAD(bl.total_restant)}
+                            {fmtPriceMAD(bl.montant_restant ?? bl.total)}
                           </td>
                           <td className="text-center">
                             <Badge status={bl.status} />
@@ -1694,6 +1631,100 @@ const PaymentsTab = ({ data, loading }) => {
             </Section>
           ) : null,
         )}
+    </>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TAB: CLIENTS — Per-client revenue & payment statistics
+// ─────────────────────────────────────────────────────────────────────────────
+const ClientsTab = ({ data, loading }) => {
+  if (loading) return <Skeleton h={300} />;
+  if (!data) return <Empty />;
+
+  const { clients = [] } = data;
+  if (!clients.length)
+    return <Empty msg="Aucun client avec des factures dans cette période" />;
+
+  const barOpts = {
+    chart: { ...CHART, type: "bar" },
+    colors: ["#4361ee", "#22c55e"],
+    plotOptions: { bar: { horizontal: true, borderRadius: 5, barHeight: "55%" } },
+    dataLabels: { enabled: false },
+    xaxis: { labels: { formatter: (v) => fmtPrice(v), style: { colors: "#94a3b8", fontSize: "10px" } } },
+    legend: { position: "top", fontFamily: "Syne, sans-serif" },
+    tooltip: { y: { formatter: (v) => fmtPriceMAD(v) } },
+    grid: { borderColor: "#e2e8f0" },
+  };
+  const barSeries = [
+    { name: "CA TTC", data: clients.map((c) => ({ x: c.client?.nom_complete || `#${c.client_id}`, y: parseFloat(c.total_ttc) })) },
+    { name: "Encaissé", data: clients.map((c) => ({ x: c.client?.nom_complete || `#${c.client_id}`, y: parseFloat(c.total_paye) })) },
+  ];
+
+  const totals = clients.reduce(
+    (acc, c) => ({
+      ttc: acc.ttc + parseFloat(c.total_ttc || 0),
+      paye: acc.paye + parseFloat(c.total_paye || 0),
+      restant: acc.restant + parseFloat(c.total_restant || 0),
+    }),
+    { ttc: 0, paye: 0, restant: 0 },
+  );
+
+  return (
+    <>
+      <div className="rp-grid-4">
+        <KpiCard icon="👥" accent="blue" label="Clients actifs" value={clients.length} sub="avec factures" />
+        <KpiCard icon="💵" accent="blue" label="CA Total TTC" value={fmtPriceMAD(totals.ttc)} />
+        <KpiCard icon="✅" accent="green" label="Total Encaissé" value={fmtPriceMAD(totals.paye)} />
+        <KpiCard icon="⏳" accent="yellow" label="Total Restant" value={fmtPriceMAD(totals.restant)} />
+      </div>
+
+      <Section title="CA & Encaissements par Client">
+        {clients.length > 0 ? (
+          <ReactApexChart options={barOpts} series={barSeries} type="bar" height={Math.max(260, clients.length * 42)} />
+        ) : <Empty />}
+      </Section>
+
+      <Section title="Classement Clients — Détail Complet">
+        <div className="rp-table-wrap">
+          <div className="table-responsive">
+            <table className="table table-bordered table-hover align-middle text-nowrap">
+              <thead className="table-light">
+                <tr>
+                  <th className="text-center">#</th>
+                  <th>Client</th>
+                  <th className="text-center">Nb. Fact.</th>
+                  <th className="text-center">Nb. BLs</th>
+                  <th className="text-end">CA TTC</th>
+                  <th className="text-end">CA BLs</th>
+                  <th className="text-end">Encaissé</th>
+                  <th className="text-end">Restant</th>
+                  <th className="text-center">Taux Paiem.</th>
+                  <th>Dernière Fact.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clients.map((c, i) => (
+                  <tr key={c.client_id}>
+                    <td className="text-center">
+                      <span className="badge bg-primary rounded-pill">{i + 1}</span>
+                    </td>
+                    <td className="fw-semibold">{c.client?.nom_complete || "—"}</td>
+                    <td className="text-center">{c.nb_factures || 0}</td>
+                    <td className="text-center">{c.nb_bls || 0}</td>
+                    <td className="text-end fw-bold">{fmtPriceMAD(c.total_ttc)}</td>
+                    <td className="text-end">{fmtPriceMAD(c.total_bl_ttc || 0)}</td>
+                    <td className="text-end text-success fw-semibold">{fmtPriceMAD(c.total_paye)}</td>
+                    <td className="text-end text-danger fw-semibold">{fmtPriceMAD(c.total_restant)}</td>
+                    <td className="text-center"><ProgressCell value={c.taux_paiement} /></td>
+                    <td>{fmtDate(c.last_facture_date)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Section>
     </>
   );
 };
@@ -2107,6 +2138,7 @@ const ReportsPage = () => {
       revenue: () =>
         reportsService.getRevenueOverTime({ ...filters, granularity }),
       payments: () => reportsService.getPaymentStatus(filters),
+      clients: () => reportsService.getClientStats({ ...filters, limit: 20 }),
       products: () => reportsService.getProductStats({ ...filters, limit: 10 }),
       comparison: () => reportsService.getComparison(filters),
     }),
@@ -2154,6 +2186,7 @@ const ReportsPage = () => {
       />
     ),
     payments: <PaymentsTab data={data.payments} loading={!!loading.payments} />,
+    clients: <ClientsTab data={data.clients} loading={!!loading.clients} />,
     products: <ProductsTab data={data.products} loading={!!loading.products} />,
     comparison: (
       <ComparisonTab data={data.comparison} loading={!!loading.comparison} />

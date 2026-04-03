@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { config_url } from "@/utils/config";
@@ -47,12 +47,13 @@ function FornisseurDetails() {
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [productSearchData, setProductSearchData] = useState(null);
+  const [allProductsStats, setAllProductsStats] = useState(null);
   const [searchParams, setSearchParams] = useState({
     reference: "",
     exactMatch: false,
+    documentType: "all",
     startDate: "",
     endDate: "",
-    includeBonAchatDetails: false,
   });
   const [searchHistory, setSearchHistory] = useState([]);
 
@@ -61,6 +62,49 @@ function FornisseurDetails() {
     fetchFornisseurData();
   }, [id]);
 
+  // Fetch all products statistics for the fornisseur
+  const fetchAllProductsStats = useCallback(async (useFilters = false) => {
+    try {
+      setProductSearchLoading(true);
+
+      // Build params for filtering (only if useFilters is true)
+      const params = {};
+      if (useFilters) {
+        if (searchParams.startDate) params.startDate = searchParams.startDate;
+        if (searchParams.endDate) params.endDate = searchParams.endDate;
+      }
+
+      const response = await axios.get(
+        `${config_url}/api/fornisseurs/${id}/products`,
+        { params, withCredentials: true }
+      );
+
+      setAllProductsStats(response.data);
+
+      if (response.data.products && response.data.products.length > 0) {
+        topTost(`${response.data.products.length} produit(s) trouvé(s)`, "success");
+      } else {
+        topTost("Aucun produit trouvé", "info");
+      }
+    } catch (error) {
+      console.error("Error fetching all products stats:", error);
+      topTost("Erreur lors du chargement des statistiques", "error");
+    } finally {
+      setProductSearchLoading(false);
+    }
+  }, [id, searchParams]);
+
+  // Fetch all products stats when product search panel opens
+  useEffect(() => {
+    if (showProductSearch) {
+      // Reset data when panel opens
+      setAllProductsStats(null);
+      setProductSearchData(null);
+      // Fetch all products
+      fetchAllProductsStats(false);
+    }
+  }, [showProductSearch, fetchAllProductsStats]);
+
   const fetchFornisseurData = async () => {
     try {
       setLoading(true);
@@ -68,29 +112,16 @@ function FornisseurDetails() {
       // Fetch fornisseur details
       const fornisseurRes = await axios.get(
         `${config_url}/api/fornisseurs/${id}`,
-        {
-          withCredentials: true,
-        },
+        { withCredentials: true },
       );
       setFornisseur(fornisseurRes.data.fornisseur);
 
-      // Fetch fornisseur BonAchats summary (if you have this endpoint)
-      try {
-        const summaryRes = await axios.get(
-          `${config_url}/api/fornisseurs/${id}/bon-achats/stats`,
-          { withCredentials: true },
-        );
-        setSummary(summaryRes.data);
-      } catch (error) {
-        console.log("No summary endpoint available, using fallback");
-      }
-
-      // Fetch recent BonAchats
+      // Fetch recent FacturesAchat
       const recentRes = await axios.get(
-        `${config_url}/api/fornisseurs/${id}/bon-achats/recent`,
+        `${config_url}/api/fornisseurs/${id}/factures-achat/recent`,
         { withCredentials: true },
       );
-      setHistory(recentRes.data.recentBonAchats || []);
+      setHistory(recentRes.data.recentFacturesAchat || []);
     } catch (error) {
       console.error("Error fetching fornisseur data:", error);
       topTost(
@@ -103,81 +134,75 @@ function FornisseurDetails() {
   };
 
   const handleProductSearch = async () => {
-    if (!searchParams.reference.trim()) {
-      topTost("Veuillez saisir une référence produit", "warning");
+    // Allow search without reference if date filters are applied
+    if (!searchParams.reference.trim() && !searchParams.startDate && !searchParams.endDate) {
+      topTost("Veuillez saisir une référence produit ou appliquer des filtres de date", "warning");
       return;
     }
 
     try {
       setProductSearchLoading(true);
 
-      // Build params
-      const params = {
-        reference: searchParams.reference.trim(),
-      };
+      const params = {};
 
-      // Add optional parameters
-      if (searchParams.exactMatch === true) {
-        params.exactMatch = "true";
+      if (searchParams.reference.trim()) {
+        params.reference = searchParams.reference.trim();
       }
-      if (searchParams.startDate) {
-        params.startDate = searchParams.startDate;
-      }
-      if (searchParams.endDate) {
-        params.endDate = searchParams.endDate;
-      }
-      if (searchParams.includeBonAchatDetails === true) {
-        params.includeBonAchatDetails = "true";
-      }
+      if (searchParams.startDate) params.startDate = searchParams.startDate;
+      if (searchParams.endDate) params.endDate = searchParams.endDate;
 
-      console.log("Search params:", params);
-
-      const response = await axios.get(
-        `${config_url}/api/fornisseurs/${id}/product-history`,
-        {
-          params: params,
-          withCredentials: true,
-        },
-      );
-
-      console.log("Search response:", response.data);
-
-      if (
-        response.data &&
-        response.data.history &&
-        response.data.history.length > 0
-      ) {
-        setProductSearchData(response.data);
-        topTost(
-          `Trouvé ${response.data.history.length} entrée(s) pour la référence ${searchParams.reference}`,
-          "success",
+      let response;
+      if (searchParams.reference.trim()) {
+        // Search by reference
+        response = await axios.get(
+          `${config_url}/api/fornisseurs/${id}/product-history`,
+          { params, withCredentials: true },
         );
-      } else {
+
         setProductSearchData(response.data);
-        topTost("Aucun produit trouvé pour cette référence", "info");
+        if (response.data.history && response.data.history.length > 0) {
+          topTost(
+            `Trouvé ${response.data.history.length} entrée(s) pour "${searchParams.reference}"`,
+            "success",
+          );
+        } else {
+          topTost("Aucun produit trouvé pour cette référence", "info");
+        }
+      } else {
+        // Search all products with date filter
+        response = await axios.get(
+          `${config_url}/api/fornisseurs/${id}/products`,
+          { params, withCredentials: true },
+        );
+        setAllProductsStats(response.data);
+        if (response.data.products && response.data.products.length > 0) {
+          topTost(`Trouvé ${response.data.products.length} produit(s)`, "success");
+        } else {
+          topTost("Aucun produit trouvé", "info");
+        }
       }
 
       // Add to search history
-      setSearchHistory((prev) => [
-        {
-          reference: searchParams.reference.trim(),
-          exactMatch: searchParams.exactMatch,
-          startDate: searchParams.startDate,
-          endDate: searchParams.endDate,
-          timestamp: new Date().toISOString(),
-          resultCount: response.data.summary?.totalEntries || 0,
-        },
-        ...prev.slice(0, 4),
-      ]);
+      if (searchParams.reference.trim()) {
+        setSearchHistory((prev) => [
+          {
+            reference: searchParams.reference.trim(),
+            startDate: searchParams.startDate,
+            endDate: searchParams.endDate,
+            timestamp: new Date().toISOString(),
+            resultCount: response.data.summary?.totalEntries || 0,
+          },
+          ...prev.slice(0, 4),
+        ]);
+      }
 
       setShowProductSearch(true);
     } catch (error) {
       console.error("Error:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
-        "Erreur lors de la recherche";
-      topTost(errorMessage, "error");
+      topTost(
+        error.response?.data?.message || error.message || "Erreur lors de la recherche",
+        "error",
+      );
       setProductSearchData(null);
     } finally {
       setProductSearchLoading(false);
@@ -187,13 +212,14 @@ function FornisseurDetails() {
   // Clear product search
   const clearProductSearch = () => {
     setProductSearchData(null);
+    setAllProductsStats(null);
     setShowProductSearch(false);
     setSearchParams({
       reference: "",
       exactMatch: false,
+      documentType: "all",
       startDate: "",
       endDate: "",
-      includeBonAchatDetails: false,
     });
   };
 
@@ -204,7 +230,7 @@ function FornisseurDetails() {
       exactMatch: search.exactMatch,
       startDate: search.startDate || "",
       endDate: search.endDate || "",
-      includeBonAchatDetails: search.includeBonAchatDetails || false,
+      documentType: "all",
     });
     // Trigger search automatically when loading previous search
     setTimeout(() => handleProductSearch(), 100);
@@ -307,9 +333,20 @@ function FornisseurDetails() {
     });
   };
 
+  // Format currency
+  const formatCurrency = (amount) => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return "0,00 MAD";
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "MAD",
+      minimumFractionDigits: 2,
+    }).format(num);
+  };
+
   // Handle BonAchat view
   const handleViewBonAchat = (bonAchatId) => {
-    navigate(`/bon-achat/${bonAchatId}`);
+    navigate(`/facture-achat/${bonAchatId}`);
   };
 
   // Safe quantity parsing
@@ -324,27 +361,20 @@ function FornisseurDetails() {
     if (!history.length) return null;
 
     const stats = {
-      totalBonAchats: history.length,
+      totalFacturesAchat: history.length,
       totalAmountTTC: history.reduce(
-        (sum, ba) => sum + parseFloat(ba.montant_ttc || 0),
+        (sum, fa) => sum + parseFloat(fa.totalTTC || 0),
         0,
       ),
       totalAmountHT: history.reduce(
-        (sum, ba) => sum + parseFloat(ba.montant_ht || 0),
-        0,
-      ),
-      totalDiscount: history.reduce(
-        (sum, ba) => sum + parseFloat(ba.remise || 0),
+        (sum, fa) => sum + parseFloat(fa.totalHT || 0),
         0,
       ),
       statusCounts: {},
-      paymentMethodCounts: {},
     };
 
-    history.forEach((ba) => {
-      stats.statusCounts[ba.status] = (stats.statusCounts[ba.status] || 0) + 1;
-      stats.paymentMethodCounts[ba.mode_reglement] =
-        (stats.paymentMethodCounts[ba.mode_reglement] || 0) + 1;
+    history.forEach((fa) => {
+      stats.statusCounts[fa.status] = (stats.statusCounts[fa.status] || 0) + 1;
     });
 
     return stats;
@@ -429,11 +459,11 @@ function FornisseurDetails() {
               <div className="row mt-3">
                 <div className="col-md-6">
                   <div className="d-flex align-items-center mb-2">
-                    <FiPhone className="me-2 text-white" />
+                    <FiPhone className="me-2 text-muted" />
                     <span>{fornisseur.telephone}</span>
                   </div>
                   <div className="d-flex align-items-center mb-2">
-                    <FiMapPin className="me-2 text-white" />
+                    <FiMapPin className="me-2 text-muted" />
                     <span>{fornisseur.ville || "Ville non spécifiée"}</span>
                   </div>
                 </div>
@@ -469,7 +499,7 @@ function FornisseurDetails() {
               <div className="card-body">
                 {/* Search Form */}
                 <div className="row mb-4">
-                  <div className="col-md-6">
+                  <div className="col-md-8">
                     <div className="input-group">
                       <span className="input-group-text">
                         <FiBox />
@@ -477,7 +507,7 @@ function FornisseurDetails() {
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="Entrez la référence du produit"
+                        placeholder="Entrez la référence du produit (ex: ESQ40)"
                         value={searchParams.reference}
                         onChange={(e) =>
                           setSearchParams({
@@ -489,10 +519,6 @@ function FornisseurDetails() {
                           if (e.key === "Enter") handleProductSearch();
                         }}
                       />
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="d-flex gap-2">
                       <button
                         className="btn btn-primary"
                         onClick={handleProductSearch}
@@ -514,56 +540,74 @@ function FornisseurDetails() {
                   </div>
                 </div>
 
-                {/* Date Range */}
-                <div className="row mb-4">
-                  <div className="col-md-3">
-                    <label className="form-label">Date début</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={searchParams.startDate}
-                      onChange={(e) =>
-                        setSearchParams({
-                          ...searchParams,
-                          startDate: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="col-md-3">
-                    <label className="form-label">Date fin</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={searchParams.endDate}
-                      onChange={(e) =>
-                        setSearchParams({
-                          ...searchParams,
-                          endDate: e.target.value,
-                        })
-                      }
-                    />
-                  </div>
-                  <div className="col-md-6 d-flex align-items-end">
-                    <div className="form-check">
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id="includeDetails"
-                        checked={searchParams.includeBonAchatDetails}
-                        onChange={(e) =>
-                          setSearchParams({
-                            ...searchParams,
-                            includeBonAchatDetails: e.target.checked,
-                          })
-                        }
-                      />
-                      <label
-                        className="form-check-label"
-                        htmlFor="includeDetails"
+                {/* Date Range Filter */}
+                <div className="row mb-3">
+                  <div className="col-md-12">
+                    <div className="d-flex align-items-center gap-3 flex-wrap">
+                      <span className="text-muted small">Filtrer par date:</span>
+                      <div className="d-flex align-items-center gap-2">
+                        <label className="small mb-0">Du:</label>
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          style={{ width: "150px" }}
+                          value={searchParams.startDate}
+                          onChange={(e) =>
+                            setSearchParams({
+                              ...searchParams,
+                              startDate: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="d-flex align-items-center gap-2">
+                        <label className="small mb-0">Au:</label>
+                        <input
+                          type="date"
+                          className="form-control form-control-sm"
+                          style={{ width: "150px" }}
+                          value={searchParams.endDate}
+                          onChange={(e) =>
+                            setSearchParams({
+                              ...searchParams,
+                              endDate: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => {
+                          setProductSearchData(null);
+                          fetchAllProductsStats(true); // Use filters
+                        }}
+                        disabled={productSearchLoading}
                       >
-                        Inclure les détails des bons d'achat
-                      </label>
+                        {productSearchLoading ? (
+                          <span className="spinner-border spinner-border-sm"></span>
+                        ) : (
+                          <>
+                            <FiSearch size={14} className="me-1" />
+                            Appliquer
+                          </>
+                        )}
+                      </button>
+                      {(searchParams.startDate || searchParams.endDate) && (
+                        <button
+                          className="btn btn-sm btn-outline-secondary"
+                          onClick={() => {
+                            setSearchParams({
+                              ...searchParams,
+                              startDate: "",
+                              endDate: "",
+                            });
+                            setProductSearchData(null);
+                            fetchAllProductsStats(false); // Fetch all without filters
+                          }}
+                        >
+                          <FiX size={14} /> Reset
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -744,10 +788,10 @@ function FornisseurDetails() {
                                         </div>
                                         <div className="col-md-3">
                                           <div className="mb-3">
-                                            <h6>Période (فترة)</h6>
+                                            <h6>Période</h6>
                                             <p className="mb-1">
                                               <small>
-                                                Première (أولاً):{" "}
+                                                Première:{" "}
                                                 {formatDateShort(
                                                   stat.firstSeen,
                                                 )}
@@ -755,7 +799,7 @@ function FornisseurDetails() {
                                             </p>
                                             <p className="mb-0">
                                               <small>
-                                                Dernière (آخر):{" "}
+                                                Dernière:{" "}
                                                 {formatDateShort(stat.lastSeen)}
                                               </small>
                                             </p>
@@ -930,7 +974,7 @@ function FornisseurDetails() {
                                           <td>
                                             <span className="d-flex align-items-center">
                                               <FiCalendar className="me-1 text-muted" />
-                                              {formatDate(item.date_creation)}
+                                              {formatDate(item.issueDate || item.date_creation)}
                                             </span>
                                           </td>
                                           <td>
@@ -991,6 +1035,7 @@ function FornisseurDetails() {
                         </div>
                       </div>
                     ) : (
+                      // Empty state when no history found
                       <div className="row">
                         <div className="col-12">
                           <div className="card">
@@ -1012,14 +1057,154 @@ function FornisseurDetails() {
                     )}
                   </>
                 ) : (
-                  <div className="text-center py-5">
-                    <FiSearch size={48} className="text-muted mb-3" />
-                    <h5>Recherche par Référence Produit</h5>
-                    <p className="text-muted mb-4">
-                      Entrez une référence produit pour voir l'historique des
-                      achats
-                    </p>
-                  </div>
+                  /* Initial search state - show all products when loaded */
+                  <>
+                    {productSearchLoading || (!allProductsStats && !productSearchData) ? (
+                      <div className="text-center py-5">
+                        <div className="spinner-border text-primary" role="status">
+                          <span className="visually-hidden">Chargement...</span>
+                        </div>
+                        <p className="mt-3">Chargement des produits...</p>
+                      </div>
+                    ) : (allProductsStats && allProductsStats.products) ? (
+                      <>
+                        {/* Statistics Cards for All Products */}
+                        <div className="row mb-4">
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-primary">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Total Produits</h6>
+                                    <h3 className="mb-0">{allProductsStats.statistics?.totalProducts || 0}</h3>
+                                  </div>
+                                  <div className="bg-primary bg-opacity-10 p-3 rounded">
+                                    <FiPackage size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-info">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Quantité Totale</h6>
+                                    <h3 className="mb-0">{allProductsStats.statistics?.totalQuantity || 0}</h3>
+                                  </div>
+                                  <div className="bg-info bg-opacity-10 p-3 rounded">
+                                    <FiTrendingUp size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-warning">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Montant Total</h6>
+                                    <h3 className="mb-0">{formatCurrency(allProductsStats.statistics?.totalAmount || 0)}</h3>
+                                  </div>
+                                  <div className="bg-warning bg-opacity-10 p-3 rounded">
+                                    <FiDollarSign size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-success">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Moyenne/Produit</h6>
+                                    <h3 className="mb-0">{formatCurrency(allProductsStats.statistics?.averagePerProduct || 0)}</h3>
+                                  </div>
+                                  <div className="bg-success bg-opacity-10 p-3 rounded">
+                                    <FiTrendingUp size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* All Products List */}
+                        {allProductsStats.products.length > 0 ? (
+                          <div className="row">
+                            <div className="col-12">
+                              <div className="card">
+                                <div className="card-header">
+                                  <h6 className="card-title mb-0">
+                                    <FiPackage className="me-2" />
+                                    Tous les Produits ({allProductsStats.products.length})
+                                  </h6>
+                                </div>
+                                <div className="card-body">
+                                  <div className="table-responsive">
+                                    <table className="table table-hover">
+                                      <thead>
+                                        <tr>
+                                          <th>Produit</th>
+                                          <th>Référence</th>
+                                          <th className="text-center">Quantité Totale</th>
+                                          <th className="text-end">Montant Total</th>
+                                          <th className="text-center">Premier Achat</th>
+                                          <th className="text-center">Dernier Achat</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {allProductsStats.products.map((product, index) => (
+                                          <tr key={index}>
+                                            <td><strong>{product.product?.designation}</strong></td>
+                                            <td><span className="text-muted">{product.product?.reference}</span></td>
+                                            <td className="text-center">
+                                              <span className="badge bg-primary">{product.totalQuantity}</span>
+                                            </td>
+                                            <td className="text-end">
+                                              <strong className="text-success">{formatCurrency(product.totalAmount)}</strong>
+                                            </td>
+                                            <td className="text-center">
+                                              <small className="text-muted">{formatDateShort(product.firstPurchase)}</small>
+                                            </td>
+                                            <td className="text-center">
+                                              <small className="text-muted">{formatDateShort(product.lastPurchase)}</small>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-5">
+                            <FiBox size={48} className="text-muted mb-3" />
+                            <h5>Aucun produit trouvé</h5>
+                            <p className="text-muted mb-4">
+                              Ce fournisseur n'a pas de produits pour cette période.
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-5">
+                        <FiBox size={48} className="text-muted mb-3" />
+                        <h5>Aucun produit trouvé</h5>
+                        <p className="text-muted mb-4">
+                          Utilisez les filtres ci-dessus ou entrez une référence pour rechercher.
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -1067,7 +1252,7 @@ function FornisseurDetails() {
               <div className="card-body">
                 {filteredHistory.length === 0 ? (
                   <div className="text-center py-5">
-                    <FiShoppingBag size={48} className="text-white mb-3" />
+                    <FiShoppingBag size={48} className="text-muted mb-3" />
                     <h5>Aucun bon d'achat trouvé</h5>
                     <p className="text-muted">
                       Aucun bon d'achat ne correspond aux filtres sélectionnés
@@ -1087,33 +1272,33 @@ function FornisseurDetails() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredHistory.map((bonAchat, index) => (
+                        {filteredHistory.map((fa, index) => (
                           <tr key={index}>
                             <td>
-                              <strong>{bonAchat.num_bon_achat}</strong>
+                              <strong>{fa.invoiceNumber}</strong>
                             </td>
                             <td>
                               <span className="d-flex align-items-center">
-                                <FiCalendar className="me-1 text-white" />
-                                {formatDate(bonAchat.date_creation)}
+                                <FiCalendar className="me-1 text-muted" />
+                                {formatDate(fa.issueDate)}
                               </span>
                             </td>
                             <td>
                               <span className="fw-semibold">
-                                {bonAchat.montant_ht}
+                                {formatCurrency(fa.totalHT)}
                               </span>
                             </td>
                             <td>
-                              <span className="fw-semibol">
-                                {bonAchat.montant_ttc}
+                              <span className="fw-semibold">
+                                {formatCurrency(fa.totalTTC)}
                               </span>
                             </td>
                             <td>
                               <span
-                                className={`badge ${getStatusColor(bonAchat.status)}`}
+                                className={`badge ${getStatusColor(fa.status)}`}
                               >
-                                {getStatusIcon(bonAchat.status)}
-                                {getStatusText(bonAchat.status)}
+                                {getStatusIcon(fa.status)}
+                                {getStatusText(fa.status)}
                               </span>
                             </td>
                             <td>
@@ -1121,7 +1306,7 @@ function FornisseurDetails() {
                                 <button
                                   className="btn btn-sm btn-outline-primary"
                                   onClick={() =>
-                                    handleViewBonAchat(bonAchat.id)
+                                    navigate(`/facture-achat/${fa.id}`)
                                   }
                                   title="Voir"
                                 >

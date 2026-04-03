@@ -31,9 +31,16 @@ import html2canvas from "html2canvas";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import AsyncSelect from "react-select/async";
-import { components } from "react-select";
 
 const MySwal = withReactContent(Swal);
+
+// Function to round to next multiple of 3
+const roundToNextMultipleOfThree = (value) => {
+  const numValue = parseFloat(value);
+  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (numValue % 3 === 0) return numValue;
+  return Math.ceil(numValue / 3) * 3;
+};
 
 // Custom ClearIndicator for react-select
 const ClearIndicator = (props) => {
@@ -333,9 +340,9 @@ const DevisDetailsPage = () => {
         produit: produit,
         unitPrice: parseFloat(produit.prix_vente) || 0,
         totalPrice:
-          (updatedItems[index].quantity || 1) *
-          (updatedItems[index].v1 || 1) *
-          (updatedItems[index].v2 || 1) *
+          (updatedItems[index].quantity || 0) *
+          (roundToNextMultipleOfThree(parseFloat(updatedItems[index].v1) || 0) / 100) *
+          (roundToNextMultipleOfThree(parseFloat(updatedItems[index].v2) || 0) / 100) *
           (parseFloat(produit.prix_vente) || 0),
       };
     }
@@ -371,7 +378,11 @@ const DevisDetailsPage = () => {
               v1: parseFloat(ligne.v1) || 1,
               v2: parseFloat(ligne.v2) || 1,
               unitPrice: parseFloat(ligne.prix_unitaire) || 0,
-              totalPrice: parseFloat(ligne.total_ligne) || 0,
+              totalPrice:
+                (parseFloat(ligne.quantite) || 0) *
+                (roundToNextMultipleOfThree(parseFloat(ligne.v1) || 0) / 100) *
+                (roundToNextMultipleOfThree(parseFloat(ligne.v2) || 0) / 100) *
+                (parseFloat(ligne.prix_unitaire) || 0),
               produit_id: ligne.produit_id,
               produit: ligne.produit || null,
             };
@@ -420,12 +431,7 @@ const DevisDetailsPage = () => {
 
   // Calculations
   const subTotal = formData.items.reduce(
-    (sum, item) =>
-      sum +
-      (item.quantity || 0) *
-        (item.v1 || 1) *
-        (item.v2 || 1) *
-        (item.unitPrice || 0),
+    (sum, item) => sum + (parseFloat(item.totalPrice) || 0),
     0,
   );
 
@@ -483,13 +489,11 @@ const DevisDetailsPage = () => {
         : parseFloat(value) || 0,
     };
 
-    // Recalculate total
     const item = updatedItems[index];
+    const calcV1 = roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100;
+    const calcV2 = roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100;
     updatedItems[index].totalPrice =
-      (item.quantity || 0) *
-      (item.v1 || 1) *
-      (item.v2 || 1) *
-      (item.unitPrice || 0);
+      (parseFloat(item.quantity) || 0) * calcV1 * calcV2 * (parseFloat(item.unitPrice) || 0);
 
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
@@ -711,7 +715,7 @@ const DevisDetailsPage = () => {
       <h2>DEVIS</h2>
       <div style="font-weight:bold; margin-top:4px;">STE. RACHIGLASS S.A.R.L. A.U</div>
       <div>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-      <div>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</div>
+      <div>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</div>
       <div>Email: ibaghatrachid83@gmail.com</div>
       <div>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
       <div>ICE: 003013206000054</div>
@@ -735,6 +739,8 @@ const DevisDetailsPage = () => {
         <th>Qté</th>
         <th>Long.</th>
         <th>Larg.</th>
+        <th>Mtre Lin.</th>
+        <th>Surface</th>
         <th>Prix U</th>
         <th>Total</th>
       </tr>
@@ -749,6 +755,8 @@ const DevisDetailsPage = () => {
           <td class="text-center">${item.quantity || 0}</td>
           <td class="text-center">${item.v1 || 1}</td>
           <td class="text-center">${item.v2 || 1}</td>
+          <td class="text-center">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td class="text-center">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
           <td class="text-end">${formatAmount(item.unitPrice || 0)}</td>
           <td class="text-end">${formatAmount(item.totalPrice || 0)}</td>
         </tr>
@@ -831,7 +839,7 @@ const DevisDetailsPage = () => {
             <h3 style="margin:0; font-size:18px; letter-spacing:1px; color:#2c5aa0;">DEVIS</h3>
             <div style="font-weight:bold; margin-top:4px; font-size:12px;">STE. RACHIGLASS S.A.R.L. A.U</div>
             <div style="font-size:10px;">VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-            <div style="font-size:9px;">Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</div>
+            <div style="font-size:9px;">Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</div>
             <div style="font-size:9px;">Email: ibaghatrachid83@gmail.com</div>
             <div style="font-size:9px;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
             <div style="font-size:9px;">ICE: 003013206000054</div>
@@ -855,6 +863,8 @@ const DevisDetailsPage = () => {
               <th style="border:1px solid #2c5aa0; padding:8px;">QTÉ</th>
               <th style="border:1px solid #2c5aa0; padding:8px;">LONG.</th>
               <th style="border:1px solid #2c5aa0; padding:8px;">LARG.</th>
+              <th style="border:1px solid #2c5aa0; padding:8px;">Mtre Lin.</th>
+              <th style="border:1px solid #2c5aa0; padding:8px;">Surface</th>
               <th style="border:1px solid #2c5aa0; padding:8px;">PRIX U</th>
               <th style="border:1px solid #2c5aa0; padding:8px;">TOTAL</th>
             </tr>
@@ -869,6 +879,8 @@ const DevisDetailsPage = () => {
                   <td style="border:1px solid #ddd; padding:6px; text-align:center;">${item.quantity || 0}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:center;">${item.v1 || 1}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:center;">${item.v2 || 1}</td>
+                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:right;">${formatAmount(item.unitPrice || 0)}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:right;">${formatAmount(item.totalPrice || 0)}</td>
                 </tr>
@@ -1083,12 +1095,12 @@ const DevisDetailsPage = () => {
           <table className="table table-bordered table-sm">
             <thead className="table-light">
               <tr>
-                <th style={{ width: "12%" }}>Code/Ref</th>
-                <th style={{ width: "25%" }}>Désignation</th>
-                <th style={{ width: "8%" }}>Qté</th>
-                <th style={{ width: "10%" }}>Longueur</th>
-                <th style={{ width: "10%" }}>Largeur</th>
-                <th style={{ width: "12%" }}>Prix/Unité</th>
+                <th style={{ width: "10%" }}>Code/Ref</th>
+                <th style={{ width: "20%" }}>Désignation</th>
+                <th style={{ width: "6%" }}>Qté</th>
+                <th style={{ width: "8%" }}>Longueur</th>
+                <th style={{ width: "8%" }}>Largeur</th>
+                <th style={{ width: "10%" }}>Prix/Unité</th>
                 <th style={{ width: "10%" }}>Total</th>
                 <th style={{ width: "5%" }}></th>
               </tr>
@@ -1096,7 +1108,7 @@ const DevisDetailsPage = () => {
             <tbody>
               {formData.items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-4 text-muted">
+                  <td colSpan={10} className="text-center py-4 text-muted">
                     Aucun article. Cliquez sur "Ajouter Article" pour commencer.
                   </td>
                 </tr>
@@ -1210,7 +1222,7 @@ const DevisDetailsPage = () => {
                       />
                     </td>
 
-                    {/* Prix/Unité - INPUT */}
+                    {/* prix/Unité - INPUT */}
                     <td>
                       <input
                         type="number"
@@ -1237,7 +1249,7 @@ const DevisDetailsPage = () => {
                         type="button"
                         className="btn btn-outline-danger btn-sm"
                         onClick={() => removeItem(index)}
-                        title="Supprimer cet article"
+                        title="supprimer cet article"
                       >
                         <FiTrash2 />
                       </button>

@@ -35,6 +35,25 @@ import withReactContent from "sweetalert2-react-content";
 
 const MySwal = withReactContent(Swal);
 
+// Function to round to next multiple of 3
+const roundToNextMultipleOfThree = (value) => {
+  const numValue = parseFloat(value);
+  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (numValue % 3 === 0) return numValue;
+  return Math.ceil(numValue / 3) * 3;
+};
+
+const calculateItemTotal = (item) => {
+  const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
+  return (
+    (parseFloat(item.quantity) || 0) *
+    calcV1 *
+    calcV2 *
+    (parseFloat(item.unitPrice) || 0)
+  );
+};
+
 // Custom ClearIndicator for react-select
 const ClearIndicator = (props) => {
   const {
@@ -335,11 +354,7 @@ const BonLivraisonDetailsPage = () => {
         produit_id: selectedOption.value,
         produit: produit,
         unitPrice: parseFloat(produit.prix_vente) || 0,
-        totalPrice:
-          updatedItems[index].quantity *
-          updatedItems[index].v1 *
-          updatedItems[index].v2 *
-          parseFloat(produit.prix_vente),
+        totalPrice: calculateItemTotal(updatedItems[index]),
       };
     }
 
@@ -429,7 +444,7 @@ const BonLivraisonDetailsPage = () => {
 
   // Calculations
   const subTotal = formData.items.reduce(
-    (sum, item) => sum + item.quantity * item.v1 * item.v2 * item.unitPrice,
+    (sum, item) => sum + calculateItemTotal(item),
     0,
   );
 
@@ -507,8 +522,7 @@ const BonLivraisonDetailsPage = () => {
 
     // Recalculate total
     const item = updatedItems[index];
-    updatedItems[index].totalPrice =
-      item.quantity * item.v1 * item.v2 * item.unitPrice;
+    updatedItems[index].totalPrice = calculateItemTotal(item);
 
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
@@ -804,6 +818,8 @@ const BonLivraisonDetailsPage = () => {
         <th>Qté</th>
         <th>Long.</th>
         <th>Larg.</th>
+        <th>Mtre Lin.</th>
+        <th>Surface</th>
         <th>Total</th>
       </tr>
     </thead>
@@ -817,7 +833,9 @@ const BonLivraisonDetailsPage = () => {
           <td class="text-center">${item.quantity}</td>
           <td class="text-center">${item.v1}</td>
           <td class="text-center">${item.v2}</td>
-          <td class="text-end">${formatAmount(item.totalPrice)}</td>
+          <td class="text-center">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td class="text-center">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td class="text-end">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
         </tr>
       `,
         )
@@ -981,7 +999,7 @@ const BonLivraisonDetailsPage = () => {
     <h2 style="margin: 0;">BON LIVRAISON</h2>
     <h3 style="margin: 5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
     <p>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</p>
-    <p>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+    <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
   </div>
 
 
@@ -1004,6 +1022,8 @@ const BonLivraisonDetailsPage = () => {
         <th>Qté</th>
         <th>Long.</th>
         <th>Larg.</th>
+        <th>Mtre Lin.</th>
+        <th>Surface</th>
         <th>Prix U</th>
         <th>Total</th>
       </tr>
@@ -1018,8 +1038,10 @@ const BonLivraisonDetailsPage = () => {
           <td class="text-center">${item.quantity}</td>
           <td class="text-center">${item.v1}</td>
           <td class="text-center">${item.v2}</td>
+          <td class="text-center">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td class="text-center">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
           <td class="text-end">${formatAmount(item.unitPrice)}</td>
-          <td class="text-end">${formatAmount(item.totalPrice)}</td>
+          <td class="text-end">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
         </tr>
       `,
         )
@@ -1089,7 +1111,7 @@ const BonLivraisonDetailsPage = () => {
           <h2 style="margin:0; font-size:1rem; letter-spacing:1px;">BON DE LIVRAISON</h2>
           <div style="font-weight:bold; margin-top:4px;">STE. RACHIGLASS S.A.R.L. A.U</div>
           <div>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-          <div>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</div>
+          <div>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</div>
           <div>Email: ibaghatrachid83@gmail.com</div>
           <div>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
           <div>ICE: 003013206000054</div>
@@ -1114,6 +1136,8 @@ const BonLivraisonDetailsPage = () => {
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Qté</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Long.</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Larg.</th>
+            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Mtre Lin.</th>
+            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Surface</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Total</th>
           </tr>
         </thead>
@@ -1127,7 +1151,9 @@ const BonLivraisonDetailsPage = () => {
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.quantity}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v1}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v2}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.totalPrice)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
             </tr>
           `,
             )
@@ -1243,6 +1269,8 @@ const BonLivraisonDetailsPage = () => {
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Qté</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Long.</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Larg.</th>
+            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Mtre Lin.</th>
+            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Surface</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:right;">Prix U</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:right;">Total</th>
           </tr>
@@ -1257,8 +1285,10 @@ const BonLivraisonDetailsPage = () => {
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.quantity}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v1}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v2}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.unitPrice)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.totalPrice)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
             </tr>
           `,
             )
@@ -1468,6 +1498,8 @@ const BonLivraisonDetailsPage = () => {
                 <th>Qté</th>
                 <th>Longueur</th>
                 <th>Largeur</th>
+                <th>Mtre Linéaire</th>
+                <th>Surface</th>
                 <th>Prix/Unité</th>
                 <th>Total</th>
                 <th></th>
@@ -1476,7 +1508,7 @@ const BonLivraisonDetailsPage = () => {
             <tbody>
               {formData.items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-4 text-muted">
+                  <td colSpan={10} className="text-center py-4 text-muted">
                     Aucun article. Cliquez sur "Ajouter Article" pour commencer.
                   </td>
                 </tr>
@@ -1571,8 +1603,7 @@ const BonLivraisonDetailsPage = () => {
                         onChange={(e) =>
                           handleItemChange(index, "v1", e.target.value)
                         }
-                        min="0.01"
-                        step="0.01"
+                        min="1"
                       />
                     </td>
 
@@ -1588,6 +1619,29 @@ const BonLivraisonDetailsPage = () => {
                         min="0.01"
                         step="0.01"
                       />
+                    </td>
+
+                    {/* Metre Lineaire - qty * v1 * v2 / 10000 */}
+                    <td className="align-middle text-center">
+                      <span className="text-primary fw-bold">
+                        {(
+                          ((parseFloat(item.quantity) || 0) *
+                            (parseFloat(item.v1) || 0) *
+                            (parseFloat(item.v2) || 0)) /
+                          10000
+                        ).toFixed(4)}
+                      </span>
+                    </td>
+
+                    {/* Surface - v1 * v2 / 10000 */}
+                    <td className="align-middle text-center">
+                      <span className="text-info fw-bold">
+                        {(
+                          ((parseFloat(item.v1) || 0) *
+                            (parseFloat(item.v2) || 0)) /
+                          10000
+                        ).toFixed(4)}
+                      </span>
                     </td>
 
                     {/* Prix/Unité */}

@@ -18,7 +18,7 @@ const analyticsRoutes = require("./routes/analytics");
 const bonLivraison = require("./routes/bonLivraison");
 const facture = require("./routes/facture");
 const reportRoutes = require("./routes/reports");
-
+const factureAchatRoutes = require("./routes/factureAchat");
 const seedAdmin = require("./utils/seedAdmin");
 
 const app = express();
@@ -91,7 +91,7 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/bonlivraisons", bonLivraison);
 app.use("/api/factures", facture);
 app.use("/api/reports", reportRoutes);
-
+app.use("/api/factures-achat", factureAchatRoutes);
 // Health check
 app.get("/", (req, res) => res.json({ message: "API running" }));
 

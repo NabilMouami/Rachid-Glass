@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { config_url } from "@/utils/config";
 import ClientPaymentStatusModal from "./ClientPaymentStatusModal";
+import { Spinner } from "reactstrap";
 
 import topTost from "@/utils/topTost";
 
@@ -44,6 +45,7 @@ function ClientDetails() {
   const [showProductSearch, setShowProductSearch] = useState(false);
   const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [productSearchData, setProductSearchData] = useState(null);
+  const [allProductsStats, setAllProductsStats] = useState(null);
   const [searchParams, setSearchParams] = useState({
     reference: "",
     exactMatch: false,
@@ -58,6 +60,64 @@ function ClientDetails() {
   useEffect(() => {
     fetchClientData();
   }, [id]);
+
+  // Fetch all products statistics for the client
+  const fetchAllProductsStats = useCallback(async (useFilters = false) => {
+    try {
+      setProductSearchLoading(true);
+      console.log("Fetching products for client:", id, "useFilters:", useFilters);
+      
+      // Build params for filtering (only if useFilters is true)
+      const params = {};
+      if (useFilters) {
+        if (searchParams.startDate) {
+          params.startDate = searchParams.startDate;
+        }
+        if (searchParams.endDate) {
+          params.endDate = searchParams.endDate;
+        }
+        if (searchParams.documentType !== "all") {
+          params.documentType = searchParams.documentType;
+        }
+      }
+      
+      console.log("Params:", params);
+      
+      const response = await axios.get(
+        `${config_url}/api/clients/${id}/products`,
+        { 
+          params: params,
+          withCredentials: true 
+        }
+      );
+      
+      console.log("API Response:", response.data);
+      setAllProductsStats(response.data);
+      
+      if (response.data.products && response.data.products.length > 0) {
+        topTost(`${response.data.products.length} produit(s) trouvé(s)`, "success");
+      } else {
+        topTost("Aucun produit trouvé", "info");
+      }
+    } catch (error) {
+      console.error("Error fetching all products stats:", error);
+      console.error("Error response:", error.response?.data);
+      topTost("Erreur lors du chargement des statistiques", "error");
+    } finally {
+      setProductSearchLoading(false);
+    }
+  }, [id, searchParams]);
+
+  // Fetch all products stats when product search panel opens
+  useEffect(() => {
+    if (showProductSearch) {
+      // Reset data when panel opens
+      setAllProductsStats(null);
+      setProductSearchData(null);
+      // Fetch all products
+      fetchAllProductsStats(false);
+    }
+  }, [showProductSearch, fetchAllProductsStats]);
 
   const fetchClientData = async () => {
     try {
@@ -94,29 +154,25 @@ function ClientDetails() {
   };
 
   const handleProductSearch = async () => {
-    if (!searchParams.reference.trim()) {
-      topTost("Veuillez saisir une référence produit", "warning");
+    // Allow search without reference if date filters are applied
+    if (!searchParams.reference.trim() && !searchParams.startDate && !searchParams.endDate && searchParams.documentType === "all") {
+      topTost("Veuillez saisir une référence produit ou appliquer des filtres", "warning");
       return;
     }
 
     try {
       setProductSearchLoading(true);
 
-      console.log("=== FIXED VERSION ===");
+      // Build params
+      const params = {};
 
-      // Build params - ONLY include documentType if it's NOT "all"
-      const params = {
-        reference: searchParams.reference.trim(),
-      };
+      if (searchParams.reference.trim()) {
+        params.reference = searchParams.reference.trim();
+      }
 
       // Only add documentType if it's NOT "all"
       if (searchParams.documentType !== "all") {
         params.documentType = searchParams.documentType;
-      }
-
-      // Don't add exactMatch when it's false
-      if (searchParams.exactMatch === true) {
-        params.exactMatch = "true";
       }
 
       // Add date range filters if provided
@@ -127,47 +183,60 @@ function ClientDetails() {
         params.endDate = searchParams.endDate;
       }
 
-      console.log("=== SEARCH PARAMS DEBUG ===");
-      console.log("searchParams:", searchParams);
-      console.log("Params to send:", params);
-
-      const response = await axios.get(
-        `${config_url}/api/clients/${id}/products-by-reference`,
-        {
-          params: params,
-          withCredentials: true,
-        },
-      );
-
-      console.log("Fixed response:", response.data);
-      console.log("History length:", response.data.history?.length || 0);
-
-      if (
-        response.data &&
-        response.data.history &&
-        response.data.history.length > 0
-      ) {
-        setProductSearchData(response.data);
-        topTost(
-          `Trouvé ${response.data.history.length} entrée(s) pour la référence ${searchParams.reference}`,
-          "success",
+      let response;
+      if (searchParams.reference.trim()) {
+        // Search by reference
+        response = await axios.get(
+          `${config_url}/api/clients/${id}/products-by-reference`,
+          {
+            params: params,
+            withCredentials: true,
+          },
         );
-      } else {
         setProductSearchData(response.data);
-        topTost("Aucun produit trouvé pour cette référence", "info");
+        if (response.data.history && response.data.history.length > 0) {
+          topTost(
+            `Trouvé ${response.data.history.length} entrée(s)`,
+            "success",
+          );
+        } else {
+          topTost("Aucun produit trouvé", "info");
+        }
+      } else {
+        // Search all products with date filter
+        response = await axios.get(
+          `${config_url}/api/clients/${id}/products`,
+          {
+            params: params,
+            withCredentials: true,
+          },
+        );
+        setAllProductsStats(response.data);
+        if (response.data.products && response.data.products.length > 0) {
+          topTost(
+            `Trouvé ${response.data.products.length} produit(s)`,
+            "success",
+          );
+        } else {
+          topTost("Aucun produit trouvé", "info");
+        }
       }
 
       // Add to search history
-      setSearchHistory((prev) => [
-        {
-          reference: searchParams.reference.trim(),
-          exactMatch: searchParams.exactMatch,
-          documentType: searchParams.documentType,
-          timestamp: new Date().toISOString(),
-          resultCount: response.data.summary?.totalEntries || 0,
-        },
-        ...prev.slice(0, 4),
-      ]);
+      if (searchParams.reference.trim()) {
+        setSearchHistory((prev) => [
+          {
+            reference: searchParams.reference.trim(),
+            exactMatch: searchParams.exactMatch,
+            documentType: searchParams.documentType,
+            startDate: searchParams.startDate,
+            endDate: searchParams.endDate,
+            timestamp: new Date().toISOString(),
+            resultCount: response.data.summary?.totalEntries || response.data.statistics?.totalProducts || 0,
+          },
+          ...prev.slice(0, 4),
+        ]);
+      }
 
       setShowProductSearch(true);
     } catch (error) {
@@ -186,6 +255,7 @@ function ClientDetails() {
   // Clear product search
   const clearProductSearch = () => {
     setProductSearchData(null);
+    setAllProductsStats(null);
     setShowProductSearch(false);
     setSearchParams({
       reference: "",
@@ -511,7 +581,7 @@ function ClientDetails() {
                 {/* Date Range Filter */}
                 <div className="row mb-3">
                   <div className="col-md-12">
-                    <div className="d-flex align-items-center gap-3">
+                    <div className="d-flex align-items-center gap-3 flex-wrap">
                       <span className="text-muted small">Filtrer par date:</span>
                       <div className="d-flex align-items-center gap-2">
                         <label className="small mb-0">Du:</label>
@@ -543,18 +613,38 @@ function ClientDetails() {
                           }
                         />
                       </div>
-                      {(searchParams.startDate || searchParams.endDate) && (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => {
+                          setProductSearchData(null);
+                          fetchAllProductsStats(true); // Use filters
+                        }}
+                        disabled={productSearchLoading}
+                      >
+                        {productSearchLoading ? (
+                          <span className="spinner-border spinner-border-sm"></span>
+                        ) : (
+                          <>
+                            <FiSearch size={14} className="me-1" />
+                            Appliquer
+                          </>
+                        )}
+                      </button>
+                      {(searchParams.startDate || searchParams.endDate || searchParams.documentType !== "all") && (
                         <button
                           className="btn btn-sm btn-outline-secondary"
-                          onClick={() =>
+                          onClick={() => {
                             setSearchParams({
                               ...searchParams,
                               startDate: "",
                               endDate: "",
-                            })
-                          }
+                              documentType: "all",
+                            });
+                            setProductSearchData(null);
+                            fetchAllProductsStats(false); // Fetch all without filters
+                          }}
                         >
-                          <FiX size={14} /> Effacer
+                          <FiX size={14} /> Reset
                         </button>
                       )}
                     </div>
@@ -957,27 +1047,154 @@ function ClientDetails() {
                     )}
                   </>
                 ) : (
-                  /* Initial search state */
-                  <div className="text-center py-5">
-                    <FiSearch size={48} className="text-muted mb-3" />
-                    <h5>Recherche par Référence Produit</h5>
-                    <p className="text-muted mb-4">
-                      Entrez une référence produit pour voir l'historique des
-                      transactions
-                    </p>
-                    <div className="text-muted small">
-                      <p className="mb-1">
-                        <FiFilter className="me-1" />
-                        Utilisez la case "Correspondance exacte" pour des
-                        résultats précis
-                      </p>
-                      <p className="mb-0">
-                        <FiBox className="me-1" />
-                        Les résultats incluent tous les documents (Devis, BL,
-                        Factures)
-                      </p>
-                    </div>
-                  </div>
+                  /* Initial search state - show all products when loaded */
+                  <>
+                    {productSearchLoading || (!allProductsStats && !productSearchData) ? (
+                      <div className="text-center py-5">
+                        <div className="spinner-border text-primary" role="status">
+                          <span className="visually-hidden">Chargement...</span>
+                        </div>
+                        <p className="mt-3">Chargement des produits...</p>
+                      </div>
+                    ) : (allProductsStats && allProductsStats.products) ? (
+                      <>
+                        {/* Statistics Cards for All Products */}
+                        <div className="row mb-4">
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-primary">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Total Produits</h6>
+                                    <h3 className="mb-0">{allProductsStats.statistics?.totalProducts || 0}</h3>
+                                  </div>
+                                  <div className="bg-primary bg-opacity-10 p-3 rounded">
+                                    <FiPackage size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-info">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Quantité Totale</h6>
+                                    <h3 className="mb-0">{allProductsStats.statistics?.totalQuantity || 0}</h3>
+                                  </div>
+                                  <div className="bg-info bg-opacity-10 p-3 rounded">
+                                    <FiTrendingUp size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-warning">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Montant Total</h6>
+                                    <h3 className="mb-0">{formatCurrency(allProductsStats.statistics?.totalAmount || 0)}</h3>
+                                  </div>
+                                  <div className="bg-warning bg-opacity-10 p-3 rounded">
+                                    <FiDollarSign size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="col-xl-3 col-md-6 mb-3">
+                            <div className="card border-success">
+                              <div className="card-body">
+                                <div className="d-flex justify-content-between align-items-center">
+                                  <div>
+                                    <h6 className="text-muted mb-1">Moyenne/Produit</h6>
+                                    <h3 className="mb-0">{formatCurrency(allProductsStats.statistics?.averagePerProduct || 0)}</h3>
+                                  </div>
+                                  <div className="bg-success bg-opacity-10 p-3 rounded">
+                                    <FiTrendingUp size={24} className="text-white" />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* All Products List */}
+                        {allProductsStats.products.length > 0 ? (
+                          <div className="row">
+                            <div className="col-12">
+                              <div className="card">
+                                <div className="card-header">
+                                  <h6 className="card-title mb-0">
+                                    <FiPackage className="me-2" />
+                                    Tous les Produits ({allProductsStats.products.length})
+                                  </h6>
+                                </div>
+                                <div className="card-body">
+                                  <div className="table-responsive">
+                                    <table className="table table-hover">
+                                      <thead>
+                                        <tr>
+                                          <th>Produit</th>
+                                          <th>Référence</th>
+                                          <th className="text-center">Quantité Totale</th>
+                                          <th className="text-end">Montant Total</th>
+                                          <th className="text-center">Première Achat</th>
+                                          <th className="text-center">Dernière Achat</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {allProductsStats.products.map((product, index) => (
+                                          <tr key={index}>
+                                            <td><strong>{product.product?.designation}</strong></td>
+                                            <td><span className="text-muted">{product.product?.reference}</span></td>
+                                            <td className="text-center">
+                                              <span className="badge bg-primary">{product.totalQuantity}</span>
+                                            </td>
+                                            <td className="text-end">
+                                              <strong className="text-success">{formatCurrency(product.totalAmount)}</strong>
+                                            </td>
+                                            <td className="text-center">
+                                              <small className="text-muted">{formatDateShort(product.firstPurchase)}</small>
+                                            </td>
+                                            <td className="text-center">
+                                              <small className="text-muted">{formatDateShort(product.lastPurchase)}</small>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-5">
+                            <FiBox size={48} className="text-muted mb-3" />
+                            <h5>Aucun produit trouvé</h5>
+                            <p className="text-muted mb-4">
+                              Ce client n'a pas de produits pour cette période.
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center py-5">
+                        <FiBox size={48} className="text-muted mb-3" />
+                        <h5>Aucun produit trouvé</h5>
+                        <p className="text-muted mb-4">
+                          Utilisez les filtres ci-dessus ou entrez une référence pour rechercher.
+                        </p>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

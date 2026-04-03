@@ -20,10 +20,8 @@ import {
   FiPlus,
   FiTrash2,
   FiPercent,
-  FiX,
 } from "react-icons/fi";
 import AsyncSelect from "react-select/async";
-import { components } from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from "axios";
@@ -32,67 +30,6 @@ import topTost from "@/utils/topTost";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
-const roundToNextMultipleOfThree = (value) => {
-  const num = parseFloat(value) || 0;
-  if (num <= 0) return 0;
-  return Math.ceil(num / 3) * 3;
-};
-
-// Custom ClearIndicator for react-select
-const ClearIndicator = (props) => {
-  const {
-    innerProps: { ref, ...rest },
-  } = props;
-  return (
-    <div
-      {...rest}
-      ref={ref}
-      style={{
-        cursor: "pointer",
-        padding: "4px",
-        display: "flex",
-        alignItems: "center",
-      }}
-    >
-      <FiX size={16} color="#6c757d" />
-    </div>
-  );
-};
-
-// Custom Option component for product display
-const ProductOption = (props) => {
-  const { data, innerRef, innerProps, isSelected, isFocused } = props;
-  const produit = data.data;
-
-  let priceRangeInfo = "";
-  if (produit.prix_vente_min && produit.prix_vente_max) {
-    priceRangeInfo = ` | Fourchette: ${produit.prix_vente_min} - ${produit.prix_vente_max} DH`;
-  } else if (produit.prix_vente_min) {
-    priceRangeInfo = ` | Min: ${produit.prix_vente_min} DH`;
-  } else if (produit.prix_vente_max) {
-    priceRangeInfo = ` | Max: ${produit.prix_vente_max} DH`;
-  }
-
-  return (
-    <div
-      ref={innerRef}
-      {...innerProps}
-      className={`p-2 cursor-pointer ${isSelected ? "bg-primary text-white" : ""} ${isFocused && !isSelected ? "bg-light" : ""}`}
-    >
-      <div className="fw-bold">{data.label}</div>
-      <div className={`small ${isSelected ? "text-white" : "text-muted"}`}>
-        Stock: {produit.qty || 0} | Prix: {produit.prix_vente} DH
-        {priceRangeInfo}
-      </div>
-      {produit.surface > 0 && (
-        <div className={`small ${isSelected ? "text-white" : "text-muted"}`}>
-          Surface: {produit.surface} m²
-        </div>
-      )}
-    </div>
-  );
-};
-
 const statusOptions = [
   { value: "brouillon", label: "Brouillon" },
   { value: "envoyée", label: "Envoyée" },
@@ -100,7 +37,6 @@ const statusOptions = [
   { value: "partiellement_payée", label: "Partiellement Payée" },
   { value: "en_retard", label: "En Retard" },
   { value: "annulée", label: "Annulée" },
-  { value: "en_attente", label: "En Attente" },
 ];
 
 const paymentTypeOptions = [
@@ -120,7 +56,6 @@ const tvaOptions = [
   { value: 20, label: "20% (Taux standard)" },
 ];
 
-// Total to French text function
 const totalToFrenchText = (amount) => {
   if (amount === 0) return "Zéro dirham";
 
@@ -235,7 +170,7 @@ const totalToFrenchText = (amount) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
-const FactureDetailsPage = () => {
+const FactureAchatsDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -244,24 +179,23 @@ const FactureDetailsPage = () => {
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
   const [formData, setFormData] = useState({
-    customerName: "",
-    customerPhone: "",
+    supplierName: "",
+    supplierPhone: "",
+    supplierEmail: "",
     issueDate: new Date(),
+    dueDate: null,
     notes: "",
     status: "brouillon",
     discountType: "fixed",
     discountValue: 0,
     paymentType: "non_paye",
-
-    // TVA specific fields
     tvaRate: 20,
     includeTvaInPrice: true,
-
     items: [],
-    advancements: [],
+    ice: "",
+    ste: "",
   });
 
-  // Fetch products
   useEffect(() => {
     const fetchProducts = async () => {
       setLoadingProduits(true);
@@ -272,7 +206,7 @@ const FactureDetailsPage = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix Achat: ${produit.prix_achat} DH)`,
           },
         }));
         setProducts(options);
@@ -285,7 +219,6 @@ const FactureDetailsPage = () => {
     fetchProducts();
   }, []);
 
-  // Load products for async select
   const loadProduits = async (inputValue) => {
     if (!inputValue) return products;
 
@@ -308,7 +241,7 @@ const FactureDetailsPage = () => {
           label: `${p.reference} - ${p.designation}`,
           data: {
             ...p,
-            displayText: `${p.reference} - ${p.designation} (Stock: ${p.qty}, Prix: ${p.prix_vente} DH)`,
+            displayText: `${p.reference} - ${p.designation} (Stock: ${p.qty}, Prix Achat: ${p.prix_achat} DH)`,
           },
         }));
       } catch (err) {
@@ -320,7 +253,6 @@ const FactureDetailsPage = () => {
     return filtered;
   };
 
-  // Handle product selection for an item
   const handleProductSelect = (selectedOption, index) => {
     const updatedItems = [...formData.items];
 
@@ -336,10 +268,9 @@ const FactureDetailsPage = () => {
       };
     } else {
       const produit = selectedOption.data;
-      const unitPrice = parseFloat(produit.prix_vente) || 0;
+      const unitPrice = parseFloat(produit.prix_achat) || 0;
       const item = updatedItems[index];
-      const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
-      const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
+      const quantity = item?.quantity || 1;
       updatedItems[index] = {
         ...item,
         code: produit.reference,
@@ -347,7 +278,7 @@ const FactureDetailsPage = () => {
         produit_id: selectedOption.value,
         produit: produit,
         unitPrice: unitPrice,
-        totalPrice: item.quantity * calcV1 * calcV2 * unitPrice,
+        totalPrice: quantity * unitPrice,
       };
     }
 
@@ -366,62 +297,45 @@ const FactureDetailsPage = () => {
   const fetchFactureDetails = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${config_url}/api/factures/${id}`);
-      const data = res.data.facture;
+      const res = await axios.get(`${config_url}/api/factures-achat/${id}`);
+      const data = res.data.factureAchat; // Fixed: Changed from 'facture' to 'factureAchat'
 
       setFacture(data);
 
-      // Map lignes to items format
       const mappedItems = data.lignes
-        ? data.lignes.map((ligne, index) => ({
-            id: ligne.id || `temp-${index}`,
+        ? data.lignes.map((ligne) => ({
+            id: ligne.id,
             code: ligne.produit?.reference || "",
             designation: ligne.produit?.designation || "",
             quantity: parseFloat(ligne.quantite) || 0,
-            v1: parseFloat(ligne.v1) || 1,
-            v2: parseFloat(ligne.v2) || 1,
             unitPrice: parseFloat(ligne.prix_unitaire) || 0,
             totalPrice: parseFloat(ligne.total_ligne) || 0,
-            tva_ligne: ligne.tva_ligne ? parseFloat(ligne.tva_ligne) : null,
             produit_id: ligne.produit_id,
             produit: ligne.produit,
           }))
         : [];
 
-      const mappedAdvancements = data.advancements
-        ? data.advancements.map((adv) => ({
-            id: adv.id,
-            amount: parseFloat(adv.amount) || 0,
-            paymentDate: adv.paymentDate
-              ? new Date(adv.paymentDate)
-              : new Date(),
-            paymentMethod: adv.paymentMethod || "espece",
-            reference: adv.reference || "",
-            notes: adv.notes || "",
-          }))
-        : [];
-
       setFormData({
-        customerName: data.customerName || data.client?.nom_complete || "",
-        customerPhone: data.customerPhone || data.client?.telephone || "",
+        supplierName: data.supplierName || "",
+        supplierPhone: data.supplierPhone || "",
+        supplierEmail: data.supplierEmail || "",
         issueDate: data.issueDate ? new Date(data.issueDate) : new Date(),
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
         notes: data.notes || "",
         status: data.status || "brouillon",
         discountType: data.discountType || "fixed",
         discountValue: parseFloat(data.discountValue) || 0,
         paymentType: data.paymentType || "non_paye",
-
-        // TVA fields
         tvaRate: parseFloat(data.tvaRate) || 20,
         includeTvaInPrice: data.includeTvaInPrice !== false,
-
         items: mappedItems,
-        advancements: mappedAdvancements,
+        ice: data.ice || "",
+        ste: data.ste || "",
       });
     } catch (err) {
       console.error(err);
-      topTost("Erreur chargement facture", "error");
-      navigate("/factures");
+      topTost("Erreur chargement facture achat", "error");
+      navigate("/facture-achat/list");
     } finally {
       setLoading(false);
     }
@@ -431,7 +345,7 @@ const FactureDetailsPage = () => {
     return (
       <Container className="py-5 text-center">
         <Spinner color="primary" />
-        <div className="mt-3">Chargement de la facture...</div>
+        <div className="mt-3">Chargement de la facture achat...</div>
       </Container>
     );
   }
@@ -439,41 +353,39 @@ const FactureDetailsPage = () => {
   if (!facture) {
     return (
       <Container className="py-5">
-        <Alert color="danger">Facture introuvable</Alert>
-        <Button color="primary" onClick={() => navigate("/factures")}>
+        <Alert color="danger">Facture achat introuvable</Alert>
+        <Button color="primary" onClick={() => navigate("/facture-achat/list")}>
           <FiArrowLeft className="me-2" /> Retour
         </Button>
       </Container>
     );
   }
 
-  // Calculations
-  const subTotal = formData.items.reduce((sum, item) => {
-    return sum + (item.quantity || 0) * (item.unitPrice || 0);
-  }, 0);
+// Update the calculation functions
+// Update the calculation functions
+const subTotal = formData.items.reduce(
+  (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
+  0,
+);
 
-  const calculateDiscount = () => {
-    if (formData.discountType === "percentage") {
-      return (subTotal * formData.discountValue) / 100;
-    }
-    return formData.discountValue;
-  };
+const calculateDiscount = () => {
+  if (formData.discountType === "percentage") {
+    return (subTotal * formData.discountValue) / 100;
+  }
+  return formData.discountValue;
+};
 
-  const discount = calculateDiscount();
-  const totalHT = Math.max(0, subTotal - discount);
+const discount = calculateDiscount();
 
-  // TVA = Total HT × (TVA_rate / 100)
-  const tvaRate = parseFloat(formData.tvaRate) || 20;
-  const tvaAmount = totalHT * (tvaRate / 100);
+// Calculate totals
+// Total HT = Subtotal - Discount (this is the base amount before TVA)
+const totalHT = Math.max(0, subTotal - discount);
 
-  // Total TTC = Total HT + TVA
-  const totalTTC = totalHT + tvaAmount;
+// TVA Amount = Total HT × TVA Rate
+const tvaAmount = totalHT * (formData.tvaRate / 100);
 
-  const totalAdvancement = formData.advancements.reduce(
-    (sum, adv) => sum + parseFloat(adv.amount || 0),
-    0,
-  );
-  const remainingAmount = Math.max(0, totalTTC - totalAdvancement);
+// NET TTC À PAYER = Total HT + TVA Amount
+const totalTTC = totalHT + tvaAmount;
 
   const getStatusColor = (s) => {
     switch (s) {
@@ -528,15 +440,15 @@ const FactureDetailsPage = () => {
       maximumFractionDigits: 2,
     });
 
-  // Handlers
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...formData.items];
+    const numValue = parseFloat(value) || 0;
+
     updatedItems[index] = {
       ...updatedItems[index],
-      [field]: parseFloat(value) || 0,
+      [field]: numValue,
     };
 
-    // Recalculate total - simple qty × unitPrice
     const item = updatedItems[index];
     updatedItems[index].totalPrice = item.quantity * item.unitPrice;
 
@@ -549,11 +461,8 @@ const FactureDetailsPage = () => {
       code: "",
       designation: "",
       quantity: 1,
-      v1: 1,
-      v2: 1,
       unitPrice: 0,
       totalPrice: 0,
-      tva_ligne: null,
       produit_id: null,
       produit: null,
     };
@@ -568,43 +477,84 @@ const FactureDetailsPage = () => {
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
 
-  const addAdvancement = () => {
-    const newAdvancement = {
-      id: Date.now(),
-      amount: 0,
-      paymentDate: new Date(),
-      paymentMethod: "espece",
-      reference: "",
-      notes: "",
-    };
-    setFormData((prev) => ({
-      ...prev,
-      advancements: [...prev.advancements, newAdvancement],
-    }));
-  };
+const handleSubmit = async () => {
+  if (!formData.supplierName.trim()) {
+    topTost("Le nom du fournisseur est requis", "error");
+    return;
+  }
 
-  const removeAdvancement = (index) => {
-    const updatedAdvancements = formData.advancements.filter(
-      (_, i) => i !== index,
+  if (!formData.items || formData.items.length === 0) {
+    topTost("La facture doit avoir au moins un article", "error");
+    return;
+  }
+
+  try {
+    // Recalculate totals to ensure consistency
+    const currentSubTotal = formData.items.reduce(
+      (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
+      0,
     );
-    setFormData((prev) => ({ ...prev, advancements: updatedAdvancements }));
-  };
+    
+    const currentDiscount = formData.discountType === "percentage" 
+      ? (currentSubTotal * formData.discountValue) / 100 
+      : formData.discountValue;
+    
+    // Total HT = Subtotal - Discount
+    const currentTotalHT = Math.max(0, currentSubTotal - currentDiscount);
+    
+    // TVA Amount = Total HT × TVA Rate
+    const currentTvaAmount = currentTotalHT * (formData.tvaRate / 100);
+    
+    // NET TTC À PAYER = Total HT + TVA Amount
+    const currentTotalTTC = currentTotalHT + currentTvaAmount;
 
-  const handleAdvancementChange = (index, field, value) => {
-    const updatedAdvancements = [...formData.advancements];
-    updatedAdvancements[index] = {
-      ...updatedAdvancements[index],
-      [field]:
-        field === "paymentDate"
-          ? value
-          : ["paymentMethod", "reference", "notes"].includes(field)
-            ? value
-            : parseFloat(value) || 0,
+    const payload = {
+      supplierName: formData.supplierName.trim(),
+      supplierPhone: formData.supplierPhone.trim(),
+      supplierEmail: formData.supplierEmail.trim(),
+      issueDate: formData.issueDate.toISOString(),
+      dueDate: formData.dueDate ? formData.dueDate.toISOString() : null,
+      notes: formData.notes,
+      status: formData.status,
+      discountType: formData.discountType,
+      discountValue: parseFloat(formData.discountValue) || 0,
+      paymentType: formData.paymentType,
+      tvaRate: formData.tvaRate,
+      includeTvaInPrice: formData.includeTvaInPrice,
+      subTotal: currentSubTotal,
+      discountAmount: currentDiscount,
+      totalHT: currentTotalHT,
+      totalTTC: currentTotalTTC,
+      tvaAmount: currentTvaAmount,
+      items: formData.items.map((item) => ({
+        id: item.id?.toString().startsWith("temp-") ? undefined : item.id,
+        produit_id: item.produit_id,
+        quantite: item.quantity,
+        prix_unitaire: item.unitPrice,
+        remise_ligne: 0,
+        total_ligne: item.totalPrice,
+      })),
+      ice: formData.ice || "",
+      ste: formData.ste || "",
     };
-    setFormData((prev) => ({ ...prev, advancements: updatedAdvancements }));
-  };
 
-  // Print function
+    await axios.put(
+      `${config_url}/api/factures-achat/${facture.id}`,
+      payload,
+    );
+
+    topTost("Facture achat mise à jour avec succès!", "success");
+    navigate("/facture-achat/list");
+  } catch (error) {
+    console.error("Error updating invoice:", error);
+    topTost(
+      error.response?.data?.message || "Erreur lors de la mise à jour",
+      "error",
+    );
+  }
+};
+
+
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
@@ -615,7 +565,7 @@ const FactureDetailsPage = () => {
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Facture ${facture.invoiceNumber}</title>
+  <title>Facture Achat ${facture.invoiceNumber}</title>
   <meta charset="UTF-8" />
   <style>
     @page { size: A4; margin: 10mm; }
@@ -726,10 +676,10 @@ const FactureDetailsPage = () => {
 
   <div class="header">
     <div>
-      <h2>FACTURE</h2>
+      <h2>FACTURE D'ACHAT</h2>
       <div style="font-weight:bold; margin-top:4px;">STE. RACHIGLASS S.A.R.L. A.U</div>
       <div>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-      <div>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</div>
+      <div>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</div>
       <div>Email: ibaghatrachid83@gmail.com</div>
       <div>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
       <div>ICE: 003013206000054</div>
@@ -742,9 +692,11 @@ const FactureDetailsPage = () => {
 
   <div class="info">
     <div>
-      <strong>Client :</strong><br/>
-      ${formData.customerName}<br/>
-      ${formData.customerPhone ? `Tél: ${formData.customerPhone}` : ""}
+      <strong>Fournisseur :</strong><br/>
+      ${formData.supplierName}<br/>
+      ${formData.supplierPhone ? `Tél: ${formData.supplierPhone}` : ""}<br/>
+      ${formData.supplierEmail ? `Email: ${formData.supplierEmail}` : ""}<br/>
+      ${formData.ice ? `ICE: ${formData.ice}` : ""}
     </div>
   </div>
 
@@ -753,11 +705,9 @@ const FactureDetailsPage = () => {
       <tr>
         <th>Code</th>
         <th>Désignation</th>
-        <th>Qté</th>
-        <th>Long.</th>
-        <th>Larg.</th>
+        <th>Quantite</th>
         <th>Prix U</th>
-        <th>Total HT</th>
+        <th>Montant</th>
       </tr>
     </thead>
     <tbody>
@@ -768,8 +718,6 @@ const FactureDetailsPage = () => {
           <td>${item.code || "—"}</td>
           <td>${item.designation || "—"}</td>
           <td class="text-center">${item.quantity}</td>
-          <td class="text-center">${item.v1}</td>
-          <td class="text-center">${item.v2}</td>
           <td class="text-end">${formatAmount(item.unitPrice)}</td>
           <td class="text-end">${formatAmount(item.totalPrice)}</td>
         </tr>
@@ -783,19 +731,11 @@ const FactureDetailsPage = () => {
     <div>Sous-total HT : ${formatAmount(subTotal)} DH</div>
     ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
     <div>Total HT : ${formatAmount(totalHT)} DH</div>
-    <div>TVA (20%) :</div>
+    <div>TVA (${formData.tvaRate}%) : ${formatAmount(tvaAmount)} DH</div>
     <div class="net-box">
       <span>Net TTC à payer</span>
       <span>${formatAmount(totalTTC)} DH</span>
     </div>
-    ${
-      totalAdvancement > 0
-        ? `
-      <div>Avancements : -${formatAmount(totalAdvancement)} DH</div>
-      <div>Reste à payer : ${formatAmount(remainingAmount)} DH</div>
-    `
-        : ""
-    }
     <div class="italic">
       ${totalToFrenchText(totalTTC)}
     </div>
@@ -812,7 +752,6 @@ const FactureDetailsPage = () => {
       Email: ibaghatrachid83@gmail.com
     </p>
     <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-    <p style="margin-top:6px;">Signature et cachet: _________________________</p>
   </div>
 
   <script>
@@ -849,10 +788,10 @@ const FactureDetailsPage = () => {
       container.innerHTML = `
       <div style="border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <h2 style="margin:0; font-size:1rem; letter-spacing:1px;">FACTURE</h2>
+          <h2 style="margin:0; font-size:1rem; letter-spacing:1px;">FACTURE D'ACHAT</h2>
           <div style="font-weight:bold; margin-top:4px;">STE. RACHIGLASS S.A.R.L. A.U</div>
           <div>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-          <div>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</div>
+          <div>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</div>
           <div>Email: ibaghatrachid83@gmail.com</div>
           <div>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
           <div>ICE: 003013206000054</div>
@@ -864,9 +803,11 @@ const FactureDetailsPage = () => {
       </div>
 
       <div style="margin-bottom:20px;">
-        <strong>Client :</strong><br/>
-        ${formData.customerName}<br/>
-        ${formData.customerPhone ? `Tél: ${formData.customerPhone}` : ""}
+        <strong>Fournisseur :</strong><br/>
+        ${formData.supplierName}<br/>
+        ${formData.supplierPhone ? `Tél: ${formData.supplierPhone}` : ""}<br/>
+        ${formData.supplierEmail ? `Email: ${formData.supplierEmail}` : ""}<br/>
+        ${formData.ice ? `ICE: ${formData.ice}` : ""}
       </div>
 
       <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:0.65rem;">
@@ -874,11 +815,9 @@ const FactureDetailsPage = () => {
           <tr style="background:#f2f2f2;">
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Code</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Désignation</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Qté</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Long.</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Larg.</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Prix U</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Total HT</th>
+            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Quantite</th>
+            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Prix Achat</th>
+            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Monatnt</th>
           </tr>
         </thead>
         <tbody>
@@ -889,8 +828,6 @@ const FactureDetailsPage = () => {
               <td style="border:1.5px solid #000; padding:6px;">${item.code || "—"}</td>
               <td style="border:1.5px solid #000; padding:6px;">${item.designation || "—"}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.quantity}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v1}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v2}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.unitPrice)}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.totalPrice)}</td>
             </tr>
@@ -903,19 +840,11 @@ const FactureDetailsPage = () => {
       <div style="margin-top:25px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
         <div>Sous-total HT : ${formatAmount(subTotal)} DH</div>
         ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
-    <div>Total HT : ${formatAmount(totalHT)} DH</div>
-    <div>TVA (20%) :</div>
-    <div style="font-weight:bold; font-size:14px;">
-      <span>Total TTC : ${formatAmount(totalTTC)} DH</span>
-    </div>
-        ${
-          totalAdvancement > 0
-            ? `
-          <div>Avancements : -${formatAmount(totalAdvancement)} DH</div>
-          <div>Reste à payer : ${formatAmount(remainingAmount)} DH</div>
-        `
-            : ""
-        }
+        <div>Total HT : ${formatAmount(totalHT)} DH</div>
+        <div>TVA (${formData.tvaRate}%) : ${formatAmount(tvaAmount)} DH</div>
+        <div style="font-weight:bold; font-size:14px;">
+          <span>Total TTC : ${formatAmount(totalTTC)} DH</span>
+        </div>
         <div style="font-style:italic; font-weight:bold; font-size:0.7rem; text-align:right;">
           ${totalToFrenchText(totalTTC)}
         </div>
@@ -942,7 +871,6 @@ const FactureDetailsPage = () => {
           Email: ibaghatrachid83@gmail.com
         </p>
         <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-        <p style="margin-top:6px;">Signature et cachet: _________________________</p>
       </div>
     `;
 
@@ -967,7 +895,7 @@ const FactureDetailsPage = () => {
         imgWidth,
         imgHeight,
       );
-      pdf.save(`Facture-${facture.invoiceNumber}.pdf`);
+      pdf.save(`Facture-Achat-${facture.invoiceNumber}.pdf`);
 
       topTost("PDF généré et téléchargé !", "success");
     } catch (err) {
@@ -978,14 +906,13 @@ const FactureDetailsPage = () => {
 
   return (
     <Container className="py-4">
-      {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <Button color="light" onClick={() => navigate("/factures")}>
+          <Button color="light" onClick={() => navigate("/facture-achat/list")}>
             <FiArrowLeft className="me-2" /> Retour
           </Button>
           <h3 className="mt-3 mb-1">
-            Facture #{facture.invoiceNumber}
+            Facture Achat #{facture.invoiceNumber}
             <Badge color={getStatusColor(formData.status)} className="ms-3">
               {statusOptions.find((o) => o.value === formData.status)?.label ||
                 formData.status}
@@ -1000,27 +927,29 @@ const FactureDetailsPage = () => {
           <Button color="outline-secondary" onClick={generateAndDownloadPDF}>
             <FiDownload className="me-2" /> PDF
           </Button>
+          <Button color="primary" onClick={handleSubmit}>
+            Enregistrer
+          </Button>
         </div>
       </div>
 
       <Row>
-        {/* Client Info */}
         <Col md={6}>
           <Card className="p-3 mb-4">
             <h5>
-              <FiUser className="me-2" /> Client
+              <FiUser className="me-2" /> Fournisseur
             </h5>
             <div className="mt-2">
               <div className="form-group mb-3">
-                <label className="form-label">Nom Client *</label>
+                <label className="form-label">Nom Fournisseur *</label>
                 <input
                   type="text"
                   className="form-control"
-                  value={formData.customerName}
+                  value={formData.supplierName}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      customerName: e.target.value,
+                      supplierName: e.target.value,
                     }))
                   }
                 />
@@ -1030,11 +959,39 @@ const FactureDetailsPage = () => {
                 <input
                   type="tel"
                   className="form-control"
-                  value={formData.customerPhone}
+                  value={formData.supplierPhone}
                   onChange={(e) =>
                     setFormData((prev) => ({
                       ...prev,
-                      customerPhone: e.target.value,
+                      supplierPhone: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="form-group mb-3">
+                <label className="form-label">Email</label>
+                <input
+                  type="email"
+                  className="form-control"
+                  value={formData.supplierEmail}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      supplierEmail: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="form-group mb-3">
+                <label className="form-label">ICE</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={formData.ice}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      ice: e.target.value,
                     }))
                   }
                 />
@@ -1043,7 +1000,6 @@ const FactureDetailsPage = () => {
           </Card>
         </Col>
 
-        {/* Facture Info */}
         <Col md={6}>
           <Card className="p-3 mb-4">
             <h5>
@@ -1051,18 +1007,30 @@ const FactureDetailsPage = () => {
             </h5>
             <div className="mt-2">
               <div className="form-group mb-3">
-                <label className="form-label">Date et Heure</label>
+                <label className="form-label">Date</label>
                 <DatePicker
                   selected={formData.issueDate}
                   onChange={(date) =>
                     setFormData((prev) => ({ ...prev, issueDate: date }))
                   }
                   className="form-control"
+                  dateFormat="dd/MM/yyyy HH:mm"
                   showTimeSelect
                   timeFormat="HH:mm"
                   timeIntervals={15}
-                  dateFormat="dd/MM/yyyy HH:mm"
                   timeCaption="Heure"
+                />
+              </div>
+              <div className="form-group mb-3">
+                <label className="form-label">Date Échéance</label>
+                <DatePicker
+                  selected={formData.dueDate}
+                  onChange={(date) =>
+                    setFormData((prev) => ({ ...prev, dueDate: date }))
+                  }
+                  className="form-control"
+                  dateFormat="dd/MM/yyyy"
+                  isClearable
                 />
               </div>
               <div className="form-group mb-3">
@@ -1082,7 +1050,7 @@ const FactureDetailsPage = () => {
                 </select>
               </div>
               <div className="form-group mb-3">
-                <label className="form-label">Type de Paiement</label>
+                <label className="form-label">Mode de Paiement</label>
                 <select
                   className="form-control"
                   value={formData.paymentType}
@@ -1105,13 +1073,12 @@ const FactureDetailsPage = () => {
         </Col>
       </Row>
 
-      {/* TVA Settings */}
       <Card className="p-3 mb-4">
         <h5>
-          <FiPercent className="me-2" /> TVA
+          <FiPercent className="me-2" /> TVA et Remise
         </h5>
         <Row className="mt-3">
-          <Col md={6}>
+          <Col md={4}>
             <div className="form-group mb-3">
               <label className="form-label">Taux de TVA</label>
               <select
@@ -1132,53 +1099,67 @@ const FactureDetailsPage = () => {
               </select>
             </div>
           </Col>
-          <Col md={6}>
+          <Col md={4}>
             <div className="form-group mb-3">
-              <label className="form-label">Type de prix</label>
-              <div className="d-flex gap-4 mt-2">
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="radio"
-                    name="includeTva"
-                    id="ttc"
-                    checked={formData.includeTvaInPrice}
-                    onChange={() =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        includeTvaInPrice: true,
-                      }))
-                    }
-                  />
-                  <label className="form-check-label" htmlFor="ttc">
-                    Prix TTC
-                  </label>
-                </div>
-                <div className="form-check">
-                  <input
-                    className="form-check-input"
-                    type="radio"
-                    name="includeTva"
-                    id="ht"
-                    checked={!formData.includeTvaInPrice}
-                    onChange={() =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        includeTvaInPrice: false,
-                      }))
-                    }
-                  />
-                  <label className="form-check-label" htmlFor="ht">
-                    Prix HT
-                  </label>
-                </div>
-              </div>
+              <label className="form-label">Inclure TVA dans le prix</label>
+              <select
+                className="form-control"
+                value={formData.includeTvaInPrice}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    includeTvaInPrice: e.target.value === "true",
+                  }))
+                }
+              >
+                <option value="true">Oui (Prix TTC)</option>
+                <option value="false">Non (Prix HT)</option>
+              </select>
+            </div>
+          </Col>
+          <Col md={4}>
+            <div className="form-group mb-3">
+              <label className="form-label">Type de Remise</label>
+              <select
+                className="form-control"
+                value={formData.discountType}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    discountType: e.target.value,
+                  }))
+                }
+              >
+                <option value="fixed">Montant Fixe (Dh)</option>
+                <option value="percentage">Pourcentage (%)</option>
+              </select>
+            </div>
+          </Col>
+          <Col md={4}>
+            <div className="form-group mb-3">
+              <label className="form-label">
+                {formData.discountType === "percentage"
+                  ? "Remise (%)"
+                  : "Remise (Dh)"}
+              </label>
+              <input
+                type="number"
+                className="form-control"
+                value={formData.discountValue}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    discountValue: parseFloat(e.target.value) || 0,
+                  }))
+                }
+                min="0"
+                max={formData.discountType === "percentage" ? 100 : subTotal}
+              />
             </div>
           </Col>
         </Row>
       </Card>
 
-      {/* Products Table */}
       <Card className="p-3 mb-4">
         <div className="d-flex justify-content-between align-items-center mb-3">
           <h5>
@@ -1193,11 +1174,11 @@ const FactureDetailsPage = () => {
           <table className="table table-bordered table-sm">
             <thead className="table-light">
               <tr>
-                <th style={{ width: "15%" }}>Code</th>
+                <th style={{ width: "10%" }}>Code</th>
                 <th style={{ width: "30%" }}>Désignation</th>
-                <th style={{ width: "10%" }}>Qté</th>
-                <th style={{ width: "15%" }}>Prix/Unité</th>
-                <th style={{ width: "15%" }}>Total HT</th>
+                <th style={{ width: "10%" }}>Quantite</th>
+                <th style={{ width: "15%" }}>Prix Achat</th>
+                <th style={{ width: "15%" }}>Montant</th>
                 <th style={{ width: "5%" }}></th>
               </tr>
             </thead>
@@ -1211,14 +1192,12 @@ const FactureDetailsPage = () => {
               ) : (
                 formData.items.map((item, index) => (
                   <tr key={item.id || index}>
-                    {/* Code - STATIC */}
                     <td className="align-middle">
                       <span className="fw-bold text-primary">
                         {item.produit?.reference || item.code || "—"}
                       </span>
                     </td>
 
-                    {/* Designation - Product Select */}
                     <td>
                       {loadingProduits ? (
                         <div className="text-center py-2 text-muted">
@@ -1241,7 +1220,7 @@ const FactureDetailsPage = () => {
                                       reference: item.code,
                                       designation: item.designation,
                                       qty: 0,
-                                      prix_vente: item.unitPrice,
+                                      prix_achat: item.unitPrice,
                                     },
                                   }
                                 : null
@@ -1250,10 +1229,6 @@ const FactureDetailsPage = () => {
                             placeholder="Rechercher produit..."
                             isClearable
                             isLoading={loadingProduits}
-                            components={{
-                              Option: ProductOption,
-                              ClearIndicator,
-                            }}
                             styles={{
                               control: (base) => ({
                                 ...base,
@@ -1268,7 +1243,7 @@ const FactureDetailsPage = () => {
                           />
                           {item.produit && (
                             <small className="text-muted d-block mt-1">
-                              Stock: {item.produit.qty || 0} | Prix:{" "}
+                              Stock: {item.produit.qty || 0} | Prix Achat:{" "}
                               {item.unitPrice?.toFixed(2) || "0.00"} DH
                             </small>
                           )}
@@ -1276,7 +1251,6 @@ const FactureDetailsPage = () => {
                       )}
                     </td>
 
-                    {/* Qté - INPUT */}
                     <td>
                       <input
                         type="number"
@@ -1290,7 +1264,6 @@ const FactureDetailsPage = () => {
                       />
                     </td>
 
-                    {/* Prix/Unité - INPUT */}
                     <td>
                       <input
                         type="number"
@@ -1304,14 +1277,12 @@ const FactureDetailsPage = () => {
                       />
                     </td>
 
-                    {/* Total HT - STATIC */}
                     <td className="align-middle text-end">
                       <span className="fw-bold text-success">
-                        {item.totalPrice?.toFixed(2) || "0.00"}
+                        {item.totalPrice?.toFixed(2) || "0.00"} Dh
                       </span>
                     </td>
 
-                    {/* Delete button */}
                     <td className="align-middle text-center">
                       <button
                         type="button"
@@ -1330,170 +1301,62 @@ const FactureDetailsPage = () => {
         </div>
       </Card>
 
-      {/* Advancements Section */}
       <Card className="p-3 mb-4">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5>Avancements</h5>
-          <Button color="primary" size="sm" onClick={addAdvancement}>
-            <FiPlus className="me-1" /> Ajouter Avancement
-          </Button>
+        <div className="form-group mb-3">
+          <label className="form-label">Notes</label>
+          <textarea
+            className="form-control"
+            rows="2"
+            value={formData.notes}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, notes: e.target.value }))
+            }
+            placeholder="Notes ou observations..."
+          />
         </div>
+      </Card>
 
-        {formData.advancements.length > 0 ? (
-          <div className="table-responsive">
-            <table className="table table-bordered table-sm">
-              <thead className="table-light">
-                <tr>
-                  <th>Date</th>
-                  <th>Montant (Dh)</th>
-                  <th>Méthode</th>
-                  <th>Référence</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {formData.advancements.map((adv, index) => (
-                  <tr key={adv.id || index}>
-                    <td>
-                      <DatePicker
-                        selected={adv.paymentDate}
-                        onChange={(date) =>
-                          handleAdvancementChange(index, "paymentDate", date)
-                        }
-                        className="form-control form-control-sm"
-                        dateFormat="dd/MM/yyyy"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        value={adv.amount}
-                        onChange={(e) =>
-                          handleAdvancementChange(
-                            index,
-                            "amount",
-                            e.target.value,
-                          )
-                        }
-                        min="0.01"
-                        step="0.01"
-                      />
-                    </td>
-                    <td>
-                      <select
-                        className="form-control form-control-sm"
-                        value={adv.paymentMethod}
-                        onChange={(e) =>
-                          handleAdvancementChange(
-                            index,
-                            "paymentMethod",
-                            e.target.value,
-                          )
-                        }
-                      >
-                        <option value="espece">Espèce</option>
-                        <option value="cheque">Chèque</option>
-                        <option value="virement">Virement</option>
-                        <option value="carte">Carte</option>
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        className="form-control form-control-sm"
-                        value={adv.reference}
-                        onChange={(e) =>
-                          handleAdvancementChange(
-                            index,
-                            "reference",
-                            e.target.value,
-                          )
-                        }
-                        placeholder="N° chèque..."
-                      />
-                    </td>
-                    <td className="text-center">
-                      <Button
-                        color="danger"
-                        size="sm"
-                        onClick={() => removeAdvancement(index)}
-                      >
-                        <FiTrash2 />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+<Card className="p-3">
+  <h5>Résumé financier</h5>
+  <Row className="mt-3">
+    <Col md={6}>
+      <div className="p-3 bg-light rounded">
+        <div className="d-flex justify-content-between mb-2">
+          <span>Sous-total:</span>
+          <strong>{formatAmount(subTotal)} Dh</strong>
+        </div>
+        {discount > 0 && (
+          <div className="d-flex justify-content-between mb-2 text-danger">
+            <span>Remise:</span>
+            <span>-{formatAmount(discount)} Dh</span>
           </div>
-        ) : (
-          <div className="alert alert-info">Aucun avancement enregistré.</div>
         )}
-      </Card>
-
-      {/* Summary */}
-      <Card className="p-3">
-        <h5>Résumé financier</h5>
-        <Row className="mt-3">
-          <Col md={7}>
-            <div className="p-3 bg-light rounded">
-              <div className="d-flex justify-content-between mb-2">
-                <span>Sous-total HT:</span>
-                <strong className="text-info">
-                  {formatAmount(subTotal)} Dh
-                </strong>
-              </div>
-              {discount > 0 && (
-                <div className="d-flex justify-content-between mb-2 text-danger">
-                  <span>Remise:</span>
-                  <span>-{formatAmount(discount)} Dh</span>
-                </div>
-              )}
-              <div className="d-flex justify-content-between mb-2">
-                <span>Total HT:</span>
-                <strong>{formatAmount(totalHT)} Dh</strong>
-              </div>
-              <div className="d-flex justify-content-between mb-2">
-                <span>TVA (20%):</span>
-                <strong className="text-info">20%</strong>
-              </div>
-              <div className="d-flex justify-content-between mb-2 fw-bold border-top pt-2">
-                <span>Total TTC:</span>
-                <span className="text-primary">
-                  {formatAmount(totalTTC)} Dh
-                </span>
-              </div>
-              <div className="mt-3 small fst-italic">
-                <strong>{totalToFrenchText(totalTTC)}</strong>
-              </div>
-            </div>
-          </Col>
-
-          <Col md={5}>
-            <div className="p-3 bg-light rounded">
-              <div className="d-flex justify-content-between mb-2">
-                <span>Avancements:</span>
-                <strong className="text-success">
-                  {formatAmount(totalAdvancement)} Dh
-                </strong>
-              </div>
-              <div className="d-flex justify-content-between fw-bold border-top pt-2">
-                <span>Reste à payer:</span>
-                <span
-                  className={
-                    remainingAmount > 0 ? "text-danger" : "text-success"
-                  }
-                >
-                  {formatAmount(remainingAmount)} Dh
-                </span>
-              </div>
-            </div>
-          </Col>
-        </Row>
-      </Card>
+        <div className="d-flex justify-content-between mb-2 fw-bold">
+          <span>Total HT:</span>
+          <strong>{formatAmount(totalHT)} Dh</strong>
+        </div>
+        <div className="d-flex justify-content-between mb-2">
+          <span>TVA ({formData.tvaRate}%):</span>
+          <strong>{formatAmount(tvaAmount)} Dh</strong>
+          <span className="text-muted small">
+            ({formatAmount(totalHT)} × {formData.tvaRate}%)
+          </span>
+        </div>
+        <div className="d-flex justify-content-between mb-2 fw-bold border-top pt-2">
+          <span>NET TTC À PAYER:</span>
+          <span className="text-primary fs-5">
+            {formatAmount(totalTTC)} Dh
+          </span>
+        </div>
+        <div className="mt-3 small fst-italic">
+          <strong>{totalToFrenchText(totalTTC)}</strong>
+        </div>
+      </div>
+    </Col>
+  </Row>
+</Card>
     </Container>
   );
 };
 
-export default FactureDetailsPage;
+export default FactureAchatsDetailsPage;

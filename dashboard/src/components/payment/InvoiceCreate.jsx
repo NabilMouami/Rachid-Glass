@@ -23,50 +23,15 @@ const previtems = [
     id: 1,
     product: "",
     qty: 1,
-    v1: 1, // Longueur - original value
-    v2: 1, // Largeur - original value
-    price_unit: 1, // Price per unit volume
+    price_unit: 1,
     total: 1,
     productId: null,
   },
 ];
 
-// Function to round to next multiple of 3 (for calculations only)
-const roundToNextMultipleOfThree = (value) => {
-  const numValue = parseFloat(value);
-
-  // Handle invalid values
-  if (isNaN(numValue) || numValue <= 0) {
-    return 1;
-  }
-
-  // If value is already a multiple of 3, return it as is
-  if (numValue % 3 === 0) {
-    return numValue;
-  }
-
-  // Calculate the next multiple of 3
-  const nextMultiple = Math.ceil(numValue / 3) * 3;
-  return nextMultiple;
-};
-
-// Function to check if value needs rounding
-const needsRounding = (value) => {
-  const numValue = parseFloat(value);
-
-  if (isNaN(numValue)) {
-    return false;
-  }
-
-  // Check if has decimal part OR is not multiple of 3
-  return numValue % 1 !== 0 || numValue % 3 !== 0;
-};
-
-// Calculate total for an item using rounded dimensions
+// Calculate total for an item - simple qty × price
 const calculateItemTotal = (item) => {
-  const roundedV1 = roundToNextMultipleOfThree(item.v1);
-  const roundedV2 = roundToNextMultipleOfThree(item.v2);
-  return item.qty * roundedV1 * roundedV2 * item.price_unit;
+  return item.qty * item.price_unit;
 };
 
 // Moroccan invoice status options
@@ -283,8 +248,6 @@ const FactureCreate = () => {
       id: items.length + 1,
       product: "",
       qty: 1,
-      v1: 1,
-      v2: 1,
       price_unit: 1,
       total: 1,
       productId: null,
@@ -372,11 +335,18 @@ const FactureCreate = () => {
     setItems(updatedItems);
   };
 
+  // Helper to parse French decimal format (comma to period)
+  const parseFrenchNumber = (value) => {
+    if (!value) return 0;
+    const processed = String(value).replace(",", ".");
+    return parseFloat(processed) || 0;
+  };
+
   const handleInputChange = (id, field, value) => {
     const updatedItems = items.map((item) => {
       if (item.id === id) {
         const processedValue =
-          field === "product" ? value : parseFloat(value) || 0;
+          field === "product" ? value : parseFrenchNumber(value);
 
         const updatedItem = {
           ...item,
@@ -388,9 +358,8 @@ const FactureCreate = () => {
           updatedItem.productId = null;
         }
 
-        // Calculate total when any of the relevant fields change
-        // using rounded dimensions for v1 and v2 in the calculation
-        if (["qty", "v1", "v2", "price_unit"].includes(field)) {
+        // Calculate total when qty or price_unit changes
+        if (["qty", "price_unit"].includes(field)) {
           updatedItem.total = calculateItemTotal(updatedItem);
         }
 
@@ -472,11 +441,15 @@ const FactureCreate = () => {
   // Calculate total after discount (HT - Hors Taxes)
   const totalAfterDiscountHT = subTotal - discount;
 
-  // Calculate TVA amount
-  const tvaAmount = (totalAfterDiscountHT * tvaRate) / 100;
+  // Total TTC = totalAfterDiscountHT (with TVA)
+  const totalTTC = totalAfterDiscountHT;
 
-  // Calculate total TTC (Toutes Taxes Comprises)
-  const totalTTC = totalAfterDiscountHT + tvaAmount;
+  // Total HT = Total TTC / (1 + TVA_rate/100)
+  const tvaRateDecimal = 1 + (tvaRate || 20) / 100;
+  const totalHT = totalTTC / tvaRateDecimal;
+
+  // TVA Amount = Total TTC - Total HT
+  const tvaAmount = totalTTC - totalHT;
 
   // Final total (depending on whether TVA is included)
   const total = includeTvaInPrice ? totalTTC : totalAfterDiscountHT;
@@ -543,12 +516,7 @@ const FactureCreate = () => {
         return false;
       }
 
-      if (
-        item.qty <= 0 ||
-        item.v1 <= 0 ||
-        item.v2 <= 0 ||
-        item.price_unit <= 0
-      ) {
+      if (item.qty <= 0 || item.price_unit <= 0) {
         topTost("Tous les champs doivent être supérieurs à 0", "error");
         return false;
       }
@@ -645,17 +613,14 @@ const FactureCreate = () => {
         advancement: parseFloat(advancementPrice),
 
         // Send items with correct field names expected by backend
-        // IMPORTANT: Send the ORIGINAL v1 and v2 values (not rounded)
-        // but the backend will receive totalPrice already calculated with rounded values
         items: items.map((item) => ({
           productId: item.productId || null,
           quantity: parseFloat(item.qty),
-          v1: parseFloat(item.v1), // Original value (not rounded)
-          v2: parseFloat(item.v2), // Original value (not rounded)
+          surface: parseFloat(item.qty), // Decrease surface by qty
           unitPrice: parseFloat(item.price_unit),
-          totalPrice: parseFloat(calculateItemTotal(item)), // This uses rounded dimensions
+          totalPrice: parseFloat(calculateItemTotal(item)),
           articleName: item.product,
-          priceAlert: priceAlerts[item.id] || null, // Include price alert info
+          priceAlert: priceAlerts[item.id] || null,
         })),
 
         // Send financial calculations
@@ -1140,19 +1105,8 @@ const FactureCreate = () => {
                 <div>
                   <h6 className="fw-bold">Ajouter des éléments de Verre :</h6>
                   <span className="fs-12 text-muted">
-                    Ajouter des éléments avec des dimensions à la facture. (Les
-                    calculs de prix utilisent les dimensions arrondies au
-                    multiple de 3 supérieur, mais les valeurs originales saisies
-                    sont conservées)
+                    Ajouter des articles à la facture.
                   </span>
-                </div>
-                <div
-                  className="avatar-text avatar-sm"
-                  data-bs-toggle="tooltip"
-                  data-bs-trigger="hover"
-                  title="Total = Qty × Longueur (arrondie au multiple de 3) × Largeur (arrondie au multiple de 3) × Unit Price"
-                >
-                  <FiInfo />
                 </div>
               </div>
               <div className="table-responsive">
@@ -1165,10 +1119,8 @@ const FactureCreate = () => {
                       <th className="text-center wd-100">#</th>
                       <th className="text-center wd-400">Nom d'Article</th>
                       <th className="text-center wd-100">Qty</th>
-                      <th className="text-center wd-100">Longueur (M1)*</th>
-                      <th className="text-center wd-100">Largeur (M2)*</th>
-                      <th className="text-center wd-100">Price/Unit M2.</th>
-                      <th className="text-center wd-150">Total Price</th>
+                      <th className="text-center wd-120">Prix/Unité</th>
+                      <th className="text-center wd-150">Total</th>
                       <th className="text-center wd-100">Action</th>
                     </tr>
                   </thead>
@@ -1179,16 +1131,12 @@ const FactureCreate = () => {
                       );
                       const hasPriceAlert = priceAlerts[item.id];
 
-                      // Calculate rounded values for display
-                      const roundedV1 = roundToNextMultipleOfThree(item.v1);
-                      const roundedV2 = roundToNextMultipleOfThree(item.v2);
-
                       return (
                         <tr
                           key={item.id}
                           className={hasPriceAlert ? "table-warning" : ""}
                         >
-                          <td>{item.id}</td>
+                          <td className="text-center">{item.id}</td>
                           <td>
                             <div className="mb-2">
                               {loadingProduits ? (
@@ -1292,6 +1240,7 @@ const FactureCreate = () => {
                               name="qty"
                               placeholder="Qty"
                               className="form-control qty"
+                              style={{ minWidth: "60px", width: "80px" }}
                               step="1"
                               min="1"
                               value={item.qty}
@@ -1307,39 +1256,10 @@ const FactureCreate = () => {
                           <td>
                             <input
                               type="number"
-                              name="v1"
-                              placeholder="Longueur"
-                              className="form-control"
-                              step="any"
-                              min="0.01"
-                              value={item.v1}
-                              onChange={(e) =>
-                                handleInputChange(item.id, "v1", e.target.value)
-                              }
-                              // Removed onBlur handler - no rounding on blur
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              name="v2"
-                              placeholder="Largeur"
-                              className="form-control"
-                              step="any"
-                              min="0.01"
-                              value={item.v2}
-                              onChange={(e) =>
-                                handleInputChange(item.id, "v2", e.target.value)
-                              }
-                              // Removed onBlur handler - no rounding on blur
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
                               name="price_unit"
-                              placeholder="Price/Unit"
+                              placeholder="Prix/Unit"
                               className={`form-control price ${hasPriceAlert ? "border-warning" : ""}`}
+                              style={{ minWidth: "100px", width: "120px" }}
                               step="0.01"
                               min="0.01"
                               value={item.price_unit}
@@ -1350,21 +1270,42 @@ const FactureCreate = () => {
                           </td>
                           <td>
                             <input
-                              type="number"
-                              name="total"
-                              placeholder="1.00"
-                              className="form-control total"
+                              type="text"
+                              className="form-control"
                               readOnly
-                              value={item.total.toFixed(2)}
+                              value={typeof item.total === 'number' ? item.total.toFixed(2) : parseFloat(item.total || 0).toFixed(2)}
                             />
+                            <small className="text-muted d-block">
+                              {item.qty} × {item.price_unit}
+                            </small>
                           </td>
                           <td className="text-center">
+                            <button
+                              className="btn btn-sm btn-success me-1"
+                              onClick={() => {
+                                const newItem = {
+                                  id: Date.now(),
+                                  product: item.product,
+                                  productId: item.productId,
+                                  qty: 1,
+                                  price_unit: item.price_unit || 1,
+                                  total: parseFloat(item.price_unit) || 1,
+                                };
+                                const currentIndex = items.findIndex(i => i.id === item.id);
+                                const newItems = [...items];
+                                newItems.splice(currentIndex + 1, 0, newItem);
+                                setItems(newItems);
+                              }}
+                              title="Ajouter même produit"
+                            >
+                              +
+                            </button>
                             {items.length > 1 && (
                               <button
                                 className="btn btn-sm btn-danger"
                                 onClick={() => removeItem(item.id)}
                               >
-                                Supprimer
+                                ×
                               </button>
                             )}
                           </td>
@@ -1436,9 +1377,9 @@ const FactureCreate = () => {
                         -{discount.toFixed(2)} Dh
                       </p>
                       <p className="mb-1">
-                        {totalAfterDiscountHT.toFixed(2)} Dh
+                        {totalHT.toFixed(2)} Dh
                       </p>
-                      <p className="mb-1">+{tvaAmount.toFixed(2)} Dh</p>
+                      <p className="mb-1">20%</p>
                       <p className="mb-1 fw-bold">{totalTTC.toFixed(2)} Dh</p>
                       <p className="mb-1">{advancementPrice.toFixed(2)} Dh</p>
                       <p className="mb-1 fw-bold border-top pt-1">

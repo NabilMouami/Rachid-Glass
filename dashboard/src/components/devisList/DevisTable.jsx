@@ -408,26 +408,23 @@ const DevisTable = () => {
   };
 
   const handleViewDevis = (devisId) => {
-    const devisItem = devis.find((d) => d.id === devisId);
-    if (devisItem) {
-      axios
-        .get(`${config_url}/api/devis/${devisId}`, {
-          withCredentials: true,
-        })
-        .then((response) => {
-          const devisData = response.data;
-          setSelectedDevis(devisData);
-          setIsDetailsModalOpen(true);
-        })
-        .catch((error) => {
-          console.error("Error fetching devis details:", error);
-          MySwal.fire({
-            title: <p>Erreur</p>,
-            text: "Échec du chargement des détails du devis",
-            icon: "error",
-          });
+    axios
+      .get(`${config_url}/api/devis/${devisId}`, {
+        withCredentials: true,
+      })
+      .then((response) => {
+        const devisData = response.data;
+        setSelectedDevis(devisData);
+        setIsDetailsModalOpen(true);
+      })
+      .catch((error) => {
+        console.error("Error fetching devis details:", error);
+        MySwal.fire({
+          title: <p>Erreur</p>,
+          text: "Échec du chargement des détails du devis",
+          icon: "error",
         });
-    }
+      });
   };
 
   const columns = [

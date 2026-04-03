@@ -36,6 +36,9 @@ import FornisseursList from "../pages/Fornisseur/fornisseurs-list";
 import DevisDetailsPage from "../pages/Devis/DevisDetails";
 import FactureDetailsPage from "../pages/Invoices/FactureDetails";
 import ReportsPage from "../pages/Reports/ReportsPage";
+import FactureAchatCreate from "@/components/payment/FactureAchatCreate";
+import FactureAchatsList from "../pages/FactureAchats/FactureAchatsList";
+import FactureAchatsDetailsPage from "../pages/FactureAchats/FactureAchatsDetails";
 
 export const router = createBrowserRouter([
   {
@@ -168,6 +171,18 @@ export const router = createBrowserRouter([
       {
         path: "reports",
         element: <ReportsPage />,
+      },
+      {
+        path: "facture-achat/create",
+        element: <FactureAchatCreate />,
+      },
+      {
+        path: "facture-achats/list",
+        element: <FactureAchatsList />,
+      },
+      {
+        path: "facture-achat/:id",
+        element: <FactureAchatsDetailsPage />,
       },
     ],
   },

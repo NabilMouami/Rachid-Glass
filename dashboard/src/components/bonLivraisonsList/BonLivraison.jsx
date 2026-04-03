@@ -365,32 +365,29 @@ const BonLivraisonTable = () => {
   };
 
   const handleViewInvoice = (invoiceId) => {
-    const invoice = bookings.find((booking) => booking.id === invoiceId);
-    if (invoice) {
-      axios
-        .get(`${config_url}/api/bonlivraisons/${invoiceId}`, {
-          withCredentials: true,
-        })
-        .then((response) => {
-          const invoiceData = response.data;
-          setSelectedInvoice({
-            ...invoiceData,
-            advancement: invoiceData.advancement || 0,
-            remainingAmount: invoiceData.remainingAmount || invoiceData.total,
-          });
-          setAdvancementPrice(invoiceData.advancement || 0);
-          setInvoiceStatus(invoiceData.status || "brouillon");
-          setIsDetailsModalOpen(true);
-        })
-        .catch((error) => {
-          console.error("Error fetching invoice details:", error);
-          MySwal.fire({
-            title: <p>Error</p>,
-            text: "Failed to load invoice details",
-            icon: "error",
-          });
+    axios
+      .get(`${config_url}/api/bonlivraisons/${invoiceId}`, {
+        withCredentials: true,
+      })
+      .then((response) => {
+        const invoiceData = response.data;
+        setSelectedInvoice({
+          ...invoiceData,
+          advancement: invoiceData.advancement || 0,
+          remainingAmount: invoiceData.remainingAmount || invoiceData.total,
         });
-    }
+        setAdvancementPrice(invoiceData.advancement || 0);
+        setInvoiceStatus(invoiceData.status || "brouillon");
+        setIsDetailsModalOpen(true);
+      })
+      .catch((error) => {
+        console.error("Error fetching invoice details:", error);
+        MySwal.fire({
+          title: <p>Error</p>,
+          text: "Failed to load invoice details",
+          icon: "error",
+        });
+      });
   };
 
   const columns = [
@@ -438,16 +435,6 @@ const BonLivraisonTable = () => {
       accessorKey: "total",
       header: () => "Total",
       cell: ({ getValue }) => <span>{safeToFixed(getValue())} Dh</span>,
-    },
-    {
-      accessorKey: "advancement",
-      header: () => "Avancement",
-      cell: ({ getValue }) => <span>{safeToFixed(getValue() || 0)} Dh</span>,
-    },
-    {
-      accessorKey: "remainingAmount",
-      header: () => "Reste à Payer",
-      cell: ({ getValue }) => <span>{safeToFixed(getValue() || 0)} Dh</span>,
     },
     {
       accessorKey: "status",

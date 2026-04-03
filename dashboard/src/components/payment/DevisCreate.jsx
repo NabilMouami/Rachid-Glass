@@ -44,11 +44,10 @@ const needsRounding = (value) => {
   return numValue % 1 !== 0 || numValue % 3 !== 0;
 };
 
-// Calculate total for an item using rounded dimensions
 const calculateItemTotal = (item) => {
-  const roundedV1 = roundToNextMultipleOfThree(item.v1);
-  const roundedV2 = roundToNextMultipleOfThree(item.v2);
-  return item.qty * roundedV1 * roundedV2 * item.price_unit;
+  const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
+  return (item.qty || 0) * calcV1 * calcV2 * (item.price_unit || 0);
 };
 
 // ────────────────────────────────────────────────
@@ -306,12 +305,19 @@ const DevisCreate = () => {
     );
   };
 
+  // Helper to parse French decimal format (comma to period)
+  const parseFrenchNumber = (value) => {
+    if (!value) return 0;
+    const processed = String(value).replace(",", ".");
+    return parseFloat(processed) || 0;
+  };
+
   const handleInputChange = (id, field, value) => {
     setItems(
       items.map((item) => {
         if (item.id !== id) return item;
 
-        const processed = field === "product" ? value : parseFloat(value) || 0;
+        const processed = field === "product" ? value : parseFrenchNumber(value);
         const updated = { ...item, [field]: processed };
 
         if (field === "product") updated.productId = null;
@@ -868,11 +874,9 @@ const DevisCreate = () => {
                     );
                     const hasPriceAlert = priceAlerts[item.id];
 
-                    // Calculate rounded values for display
-                    const roundedV1 = roundToNextMultipleOfThree(item.v1);
-                    const roundedV2 = roundToNextMultipleOfThree(item.v2);
-                    const needsRoundingV1 = needsRounding(item.v1);
-                    const needsRoundingV2 = needsRounding(item.v2);
+                    // Calculate values divided by 100 and rounded to next multiple of 3
+                    const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
+                    const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
 
                     return (
                       <tr
@@ -945,11 +949,6 @@ const DevisCreate = () => {
                             }
                             // Removed onBlur handler
                           />
-                          {needsRoundingV1 && (
-                            <small className="text-muted d-block">
-                              Utilisé: {roundedV1}
-                            </small>
-                          )}
                         </td>
                         <td>
                           <input
@@ -963,11 +962,6 @@ const DevisCreate = () => {
                             }
                             // Removed onBlur handler
                           />
-                          {needsRoundingV2 && (
-                            <small className="text-muted d-block">
-                              Utilisé: {roundedV2}
-                            </small>
-                          )}
                         </td>
                         <td>
                           <input
@@ -985,17 +979,39 @@ const DevisCreate = () => {
                             type="text"
                             className="form-control"
                             readOnly
-                            value={item.total.toFixed(2)}
+                            value={typeof item.total === 'number' ? item.total.toFixed(2) : parseFloat(item.total || 0).toFixed(2)}
                           />
                           <small className="text-muted d-block">
-                            {item.qty} × {roundedV1} × {roundedV2} ×{" "}
+                            {item.qty} × {calcV1} × {calcV2} ×{" "}
                             {item.price_unit}
                           </small>
                         </td>
                         <td className="text-center">
+                          <button
+                            className="btn btn-sm btn-success me-1"
+                            onClick={() => {
+                              const newItem = {
+                                id: Date.now(),
+                                product: item.product,
+                                productId: item.productId,
+                                qty: 1,
+                                v1: item.v1 || 1,
+                                v2: item.v2 || 1,
+                                price_unit: item.price_unit || 1,
+                                total: parseFloat(item.price_unit) || 1,
+                              };
+                              const currentIndex = items.findIndex(i => i.id === item.id);
+                              const newItems = [...items];
+                              newItems.splice(currentIndex + 1, 0, newItem);
+                              setItems(newItems);
+                            }}
+                            title="Ajouter même produit"
+                          >
+                            +
+                          </button>
                           {items.length > 1 && (
                             <button
-                              className="btn btn-sm btn-outline-danger"
+                              className="btn btn-sm btn-danger"
                               onClick={() => removeItem(item.id)}
                             >
                               ×

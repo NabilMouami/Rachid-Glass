@@ -145,7 +145,6 @@ const ProduitsList = () => {
 
   // Helper function to wrap text in PDF with collapsing support
   const wrapText = (doc, text, maxWidth, maxLines = 2, bold = false) => {
-    const currentFont = doc.internal.getFont();
     if (bold && doc.getFont().fontName.includes("bold")) {
       // If already bold, use current font
       const lines = doc.splitTextToSize(text, maxWidth);
@@ -227,10 +226,9 @@ const ProduitsList = () => {
       "Code",
       "Désignation",
       "Dimensions (mm)",
-      "Surface (m²)",
-      "Qty",
+      "Quantite",
       "Prix Achat",
-      "Valeur Stock",
+      "Total Montant",
     ];
 
     // Analyze maximum code length to adjust column width
@@ -240,14 +238,16 @@ const ProduitsList = () => {
 
     // Dynamic column widths based on content analysis
     let codeColWidth = 20;
-    let designationColWidth = 45;
-    let dimensionsColWidth = 30;
-    let surfaceColWidth = 20;
+    let designationColWidth = 50;
+    let dimensionsColWidth = 35;
+    let surfaceColWidth = 25;
+    let prixAchatColWidth = 30;
+    let totalColWidth = 30;
 
     // Adjust code column if codes are very long
     if (maxCodeLength > 25) {
       codeColWidth = Math.min(35, 10 + maxCodeLength * 0.8);
-      designationColWidth = Math.max(40, 45 - (codeColWidth - 20));
+      designationColWidth = Math.max(40, 50 - (codeColWidth - 20));
     }
 
     const colWidths = [
@@ -255,19 +255,10 @@ const ProduitsList = () => {
       designationColWidth,
       dimensionsColWidth,
       surfaceColWidth,
-      15,
-      30,
-      30,
+      prixAchatColWidth,
+      totalColWidth,
     ];
-    const colAligns = [
-      "left",
-      "left",
-      "center",
-      "center",
-      "center",
-      "right",
-      "right",
-    ];
+    const colAligns = ["left", "left", "center", "center", "right", "right"];
     const colPositions = [];
     let pos = margin;
     colWidths.forEach((w) => {
@@ -344,13 +335,13 @@ const ProduitsList = () => {
       const dimensions =
         produit.L1 && produit.L2 ? `${produit.L1} x ${produit.L2}` : "-";
       const surface = produit.surface
-        ? parseFloat(produit.surface).toFixed(4) + " m²"
+        ? parseFloat(produit.surface).toFixed(4)
         : "-";
-      const qty = (produit.qty || 0).toString();
       const prixAchat = parseFloat(produit.prix_achat || 0).toFixed(2) + " DH";
-      const valeurStock =
-        ((produit.qty || 0) * parseFloat(produit.prix_achat || 0)).toFixed(2) +
-        " DH";
+      const totalMontant =
+        (
+          parseFloat(produit.surface || 0) * parseFloat(produit.prix_achat || 0)
+        ).toFixed(2) + " DH";
 
       // Calculate row height
       const calculatedHeight = calculateRowHeight(produit);
@@ -459,10 +450,10 @@ const ProduitsList = () => {
         });
       }
 
-      // SURFACE COLUMN
-      doc.setFont("helvetica", "normal");
+      // SURFACE (QUANTITE) COLUMN
+      doc.setFont("helvetica", "bold");
       doc.setTextColor(100, 100, 100);
-      doc.setFontSize(7);
+      doc.setFontSize(8);
       const surfaceY = baseTextY;
       if (calculatedHeight > 12) {
         doc.text(
@@ -479,37 +470,6 @@ const ProduitsList = () => {
         });
       }
 
-      // QTY COLUMN - Center vertically
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-
-      // Color coding for quantity
-      if (parseInt(qty) <= 5) {
-        doc.setTextColor(231, 76, 60); // Red for low stock
-      } else if (parseInt(qty) <= 15) {
-        doc.setTextColor(243, 156, 18); // Orange for medium stock
-      } else {
-        doc.setTextColor(39, 174, 96); // Green for good stock
-      }
-
-      // Center QTY vertically in the row
-      const qtyY = baseTextY;
-      if (calculatedHeight > 12) {
-        // For taller rows, center the quantity
-        doc.text(
-          qty,
-          colPositions[4] + colWidths[4] / 2,
-          currentY + calculatedHeight / 2,
-          {
-            align: "center",
-          },
-        );
-      } else {
-        doc.text(qty, colPositions[4] + colWidths[4] / 2, qtyY, {
-          align: "center",
-        });
-      }
-
       // PRIX ACHAT COLUMN - Center vertically
       doc.setFont("helvetica", "normal");
       doc.setTextColor(80, 80, 80);
@@ -519,6 +479,27 @@ const ProduitsList = () => {
       if (calculatedHeight > 12) {
         doc.text(
           prixAchat,
+          colPositions[4] + colWidths[4] - 3,
+          currentY + calculatedHeight / 2,
+          {
+            align: "right",
+          },
+        );
+      } else {
+        doc.text(prixAchat, colPositions[4] + colWidths[4] - 3, prixY, {
+          align: "right",
+        });
+      }
+
+      // TOTAL MONTANT COLUMN
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(41, 128, 185);
+      doc.setFontSize(8);
+
+      const totalY = baseTextY;
+      if (calculatedHeight > 12) {
+        doc.text(
+          totalMontant,
           colPositions[5] + colWidths[5] - 3,
           currentY + calculatedHeight / 2,
           {
@@ -526,34 +507,7 @@ const ProduitsList = () => {
           },
         );
       } else {
-        doc.text(prixAchat, colPositions[5] + colWidths[5] - 3, prixY, {
-          align: "right",
-        });
-      }
-
-      // VALEUR STOCK COLUMN - Center vertically
-      doc.setFont("helvetica", "bold");
-      const stockValue =
-        (produit.qty || 0) * parseFloat(produit.prix_achat || 0);
-
-      if (stockValue > 10000) {
-        doc.setTextColor(211, 84, 0); // Dark orange for high value
-      } else {
-        doc.setTextColor(39, 174, 96);
-      }
-
-      const valeurY = baseTextY;
-      if (calculatedHeight > 12) {
-        doc.text(
-          valeurStock,
-          colPositions[6] + colWidths[6] - 3,
-          currentY + calculatedHeight / 2,
-          {
-            align: "right",
-          },
-        );
-      } else {
-        doc.text(valeurStock, colPositions[6] + colWidths[6] - 3, valeurY, {
+        doc.text(totalMontant, colPositions[5] + colWidths[5] - 3, totalY, {
           align: "right",
         });
       }
@@ -561,13 +515,14 @@ const ProduitsList = () => {
       currentY += calculatedHeight;
     });
 
-    // Total Row with improved styling
-    const totalValue = filteredProduits.reduce(
-      (sum, p) => sum + (p.qty || 0) * parseFloat(p.prix_achat || 0),
+    currentY += 3;
+
+    // Summary calculation
+    const totalMontantGlobal = filteredProduits.reduce(
+      (sum, p) =>
+        sum + parseFloat(p.surface || 0) * parseFloat(p.prix_achat || 0),
       0,
     );
-
-    currentY += 3;
 
     // Check space for total
     if (currentY + 15 > maxY) {
@@ -591,9 +546,9 @@ const ProduitsList = () => {
 
     // Summary info
     doc.text(
-      `Total produits: ${filteredProduits.length} | Valeur totale: ${totalValue.toFixed(2)} DH`,
+      `Total produits listés: ${filteredProduits.length} | Montant Global Total: ${totalMontantGlobal.toFixed(2)} DH`,
       margin + 5,
-      currentY + 7,
+      currentY + 9,
     );
 
     // Footer with improved styling
@@ -694,31 +649,6 @@ const ProduitsList = () => {
     if (!editModal.formData.reference || !editModal.formData.designation) {
       topTost("Veuillez remplir tous les champs obligatoires", "error");
       return;
-    }
-
-    if (
-      parseFloat(editModal.formData.prix_vente) <=
-      parseFloat(editModal.formData.prix_achat)
-    ) {
-      topTost("Le prix de vente doit être supérieur au prix d'achat", "error");
-      return;
-    }
-
-    // Validate min/max prices if both provided
-    if (
-      editModal.formData.prix_vente_min &&
-      editModal.formData.prix_vente_max
-    ) {
-      if (
-        parseFloat(editModal.formData.prix_vente_min) >
-        parseFloat(editModal.formData.prix_vente_max)
-      ) {
-        topTost(
-          "Le prix minimum ne peut pas être supérieur au prix maximum",
-          "error",
-        );
-        return;
-      }
     }
 
     try {
@@ -903,7 +833,7 @@ const ProduitsList = () => {
       header: () => (
         <span>
           <FiSquare className="me-2" />
-          Surface (m²)
+          Quantite /Stock
         </span>
       ),
       cell: (info) => {
@@ -914,50 +844,50 @@ const ProduitsList = () => {
         return <span className="text-muted">-</span>;
       },
     },
-    {
-      accessorKey: "qty",
-      header: () => (
-        <span>
-          <FiTag className="me-2" />
-          Stock
-        </span>
-      ),
-      cell: (info) => {
-        const qty = info.getValue();
-        let badgeClass = "success";
-        if (qty === 0) badgeClass = "danger";
-        else if (qty < 10) badgeClass = "warning";
+    // {
+    //   accessorKey: "qty",
+    //   header: () => (
+    //     <span>
+    //       <FiTag className="me-2" />
+    //       Stock
+    //     </span>
+    //   ),
+    //   cell: (info) => {
+    //     const qty = info.getValue();
+    //     let badgeClass = "success";
+    //     if (qty === 0) badgeClass = "danger";
+    //     else if (qty < 10) badgeClass = "warning";
 
-        return (
-          <div className="d-flex align-items-center gap-2">
-            <span
-              className={`badge bg-${badgeClass} bg-opacity-10 text-white fs-6`}
-            >
-              {qty} unités
-            </span>
-            <div className="btn-group btn-group-sm gap-2">
-              <button
-                className="btn btn-outline-success btn-sm"
-                onClick={() => handleStockOperation(info.row.original, "add")}
-                title="Ajouter au stock"
-              >
-                <FiPlus size={12} />
-              </button>
-              <button
-                className="btn btn-outline-danger btn-sm"
-                onClick={() =>
-                  handleStockOperation(info.row.original, "subtract")
-                }
-                title="Retirer du stock"
-                disabled={qty === 0}
-              >
-                <FiMinus size={12} />
-              </button>
-            </div>
-          </div>
-        );
-      },
-    },
+    //     return (
+    //       <div className="d-flex align-items-center gap-2">
+    //         <span
+    //           className={`badge bg-${badgeClass} bg-opacity-10 text-white fs-6`}
+    //         >
+    //           {qty} unités
+    //         </span>
+    //         <div className="btn-group btn-group-sm gap-2">
+    //           <button
+    //             className="btn btn-outline-success btn-sm"
+    //             onClick={() => handleStockOperation(info.row.original, "add")}
+    //             title="Ajouter au stock"
+    //           >
+    //             <FiPlus size={12} />
+    //           </button>
+    //           <button
+    //             className="btn btn-outline-danger btn-sm"
+    //             onClick={() =>
+    //               handleStockOperation(info.row.original, "subtract")
+    //             }
+    //             title="Retirer du stock"
+    //             disabled={qty === 0}
+    //           >
+    //             <FiMinus size={12} />
+    //           </button>
+    //         </div>
+    //       </div>
+    //     );
+    //   },
+    // },
     {
       accessorKey: "prix_achat",
       header: () => (
@@ -986,30 +916,46 @@ const ProduitsList = () => {
         </span>
       ),
     },
-
     {
-      accessorKey: "fournisseur",
+      id: "total_montant",
       header: () => (
         <span>
-          <FiUsers className="me-2" />
-          Fournisseur
+          <FiBarChart2 className="me-2" />
+          Total Montant
         </span>
       ),
-      cell: (info) => {
-        const produit = info.row.original;
-        if (produit.fornisseur) {
-          return (
-            <span
-              className="text-truncate"
-              title={produit.fornisseur.nom_complete}
-            >
-              {produit.fornisseur.nom_complete}
-            </span>
-          );
-        }
-        return <span className="text-muted">-</span>;
+      cell: ({ row }) => {
+        const total = (
+          parseFloat(row.original.surface || 0) *
+          parseFloat(row.original.prix_achat || 0)
+        ).toFixed(2);
+        return <span className="fw-bold text-primary">{total} DH</span>;
       },
     },
+
+    // {
+    //   accessorKey: "fournisseur",
+    //   header: () => (
+    //     <span>
+    //       <FiUsers className="me-2" />
+    //       Fournisseur
+    //     </span>
+    //   ),
+    //   cell: (info) => {
+    //     const produit = info.row.original;
+    //     if (produit.fornisseur) {
+    //       return (
+    //         <span
+    //           className="text-truncate"
+    //           title={produit.fornisseur.nom_complete}
+    //         >
+    //           {produit.fornisseur.nom_complete}
+    //         </span>
+    //       );
+    //     }
+    //     return <span className="text-muted">-</span>;
+    //   },
+    // },
     {
       accessorKey: "actions",
       header: () => "Actions",
@@ -1184,20 +1130,6 @@ const ProduitsList = () => {
                       />
                       <i className="ri-search-line search-icon"></i>
                     </div>
-                  </div>
-                  <div className="col-md-3">
-                    <select
-                      className="form-select"
-                      value={selectedFornisseur}
-                      onChange={(e) => setSelectedFornisseur(e.target.value)}
-                    >
-                      <option value="all">Tous les fournisseurs</option>
-                      {fornisseurs.map((f) => (
-                        <option key={f.id} value={f.id}>
-                          {f.nom_complete}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                 </div>
               </div>
@@ -1417,7 +1349,7 @@ const ProduitsList = () => {
                     />
                   </div>
                   <div className="col-md-3">
-                    <label className="form-label">Surface (m²)</label>
+                    <label className="form-label">Quantite (m²)</label>
                     <input
                       type="number"
                       step="0.0001"

@@ -474,31 +474,27 @@ const FactureTable = () => {
   };
 
   const handleViewInvoice = (invoiceId) => {
-    const invoice = factures.find((facture) => facture.id === invoiceId);
-    if (invoice) {
-      axios
-        .get(`${config_url}/api/factures/${invoiceId}`, {
-          withCredentials: true,
-        })
-        .then((response) => {
-          const invoiceData = response.data.facture;
-          setSelectedInvoice({
-            ...invoiceData,
-            advancement: invoiceData.advancement || 0,
-            remainingAmount:
-              invoiceData.remainingAmount || invoiceData.totalTTC,
-          });
-          setIsDetailsModalOpen(true);
-        })
-        .catch((error) => {
-          console.error("Error fetching invoice details:", error);
-          MySwal.fire({
-            title: <p>Erreur</p>,
-            text: "Échec du chargement des détails de la facture",
-            icon: "error",
-          });
+    axios
+      .get(`${config_url}/api/factures/${invoiceId}`, {
+        withCredentials: true,
+      })
+      .then((response) => {
+        const invoiceData = response.data.facture;
+        setSelectedInvoice({
+          ...invoiceData,
+          advancement: invoiceData.advancement || 0,
+          remainingAmount: invoiceData.remainingAmount || invoiceData.totalTTC,
         });
-    }
+        setIsDetailsModalOpen(true);
+      })
+      .catch((error) => {
+        console.error("Error fetching invoice details:", error);
+        MySwal.fire({
+          title: <p>Erreur</p>,
+          text: "Échec du chargement des détails de la facture",
+          icon: "error",
+        });
+      });
   };
 
   const columns = [
@@ -569,23 +565,6 @@ const FactureTable = () => {
       cell: ({ getValue }) => (
         <span className="fw-bold">{safeToFixed(getValue())} Dh</span>
       ),
-    },
-    {
-      accessorKey: "advancement",
-      header: () => "Avancement",
-      cell: ({ getValue }) => <span>{safeToFixed(getValue() || 0)} Dh</span>,
-    },
-    {
-      accessorKey: "remainingAmount",
-      header: () => "Reste à Payer",
-      cell: ({ getValue }) => {
-        const amount = getValue() || 0;
-        return (
-          <span className={amount > 0 ? "text-danger" : "text-success"}>
-            {safeToFixed(amount)} Dh
-          </span>
-        );
-      },
     },
     {
       accessorKey: "status",
@@ -719,7 +698,7 @@ const FactureTable = () => {
 
         {/* Create Button */}
         <div>
-          <Link to="/factures/create">
+          <Link to="/facture/create">
             <button className="btn btn-sm btn-success">
               <FiPlusCircle className="me-2" />
               Créer Nouvelle Facture

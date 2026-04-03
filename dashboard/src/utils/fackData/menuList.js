@@ -74,6 +74,26 @@ export const menuList = [
   },
   {
     id: 3,
+    name: "Facture Achat",
+    path: "#",
+    icon: "feather-file-text",
+    dropdownMenu: [
+      {
+        id: 1,
+        name: "List Facture Achats",
+        path: "/facture-achats/list",
+        subdropdownMenu: false,
+      },
+      {
+        id: 2,
+        name: "Facture Achat Creer",
+        path: "/facture-achat/create",
+        subdropdownMenu: false,
+      },
+    ],
+  },
+  {
+    id: 4,
     name: "Devis",
     path: "#",
     icon: "feather-clipboard",
@@ -93,7 +113,7 @@ export const menuList = [
     ],
   },
   {
-    id: 4,
+    id: 5,
     name: "Bon Livraison",
     path: "#",
     icon: "feather-file-text",
@@ -113,7 +133,7 @@ export const menuList = [
     ],
   },
   {
-    id: 8,
+    id: 6,
     name: "clients",
     path: "#",
     icon: "feather-users",
@@ -134,7 +154,7 @@ export const menuList = [
   },
 
   {
-    id: 9,
+    id: 7,
     name: "fornisseurs",
     path: "#",
     icon: "feather-briefcase",
@@ -156,7 +176,7 @@ export const menuList = [
   },
 
   {
-    id: 10,
+    id: 8,
     name: "produits",
     path: "#",
     icon: "feather-archive",
@@ -177,7 +197,7 @@ export const menuList = [
     ],
   },
   {
-    id: 11,
+    id: 9,
     name: "Statistics",
     path: "/reports",
     icon: "feather-bar-chart-2",
@@ -186,7 +206,7 @@ export const menuList = [
   },
 
   {
-    id: 5,
+    id: 10,
     name: "utilisateurs",
     path: "#",
     icon: "feather-power",

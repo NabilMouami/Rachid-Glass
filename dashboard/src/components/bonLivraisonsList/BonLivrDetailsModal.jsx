@@ -30,6 +30,14 @@ import { components } from "react-select";
 
 const MySwal = withReactContent(Swal);
 
+// Function to round to next multiple of 3
+const roundToNextMultipleOfThree = (value) => {
+  const numValue = parseFloat(value);
+  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (numValue % 3 === 0) return numValue;
+  return Math.ceil(numValue / 3) * 3;
+};
+
 // Custom ClearIndicator for react-select
 const ClearIndicator = (props) => {
   const {
@@ -519,13 +527,15 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     }
   };
 
-  // Calculate item total - matching your backend logic
   const calculateItemTotal = (item) => {
-    // Backend formula: quantite * v1 * v2 * v3 * prix_unitaire - remise
-    const baseTotal =
-      item.quantity * item.v1 * item.v2 * item.v3 * item.unitPrice;
-    const lineDiscount = item.remise_ligne || 0;
-    return Math.max(0, baseTotal - lineDiscount);
+    const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
+    return (
+      (parseFloat(item.quantity) || 0) *
+      calcV1 *
+      calcV2 *
+      (parseFloat(item.unitPrice) || 0)
+    );
   };
 
   // Calculate all totals
@@ -892,7 +902,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     <h2 style="margin: 0;">BON LIVRAISON</h2>
     <h3 style="margin: 5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
     <p>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</p>
-    <p>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+    <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
   </div>
 
   <div class="invoice-info">
@@ -910,6 +920,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         <th>Qté</th>
         <th>Long.</th>
         <th>Larg.</th>
+        <th>Mtre Lin.</th>
+        <th>Surface</th>
         <th>Total</th>
       </tr>
     </thead>
@@ -923,7 +935,9 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           <td>${parseFloat(item.quantity).toFixed(2)}</td>
           <td>${parseFloat(item.v1).toFixed(2)}</td>
           <td>${parseFloat(item.v2).toFixed(2)}</td>
-          <td>${parseFloat(item.totalPrice).toFixed(2)} Dh</td>
+          <td>${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td>${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td>${((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
         </tr>
       `,
         )
@@ -1067,7 +1081,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     <h2 style="margin: 0;">BON LIVRAISON</h2>
     <h3 style="margin: 5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
     <p>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</p>
-    <p>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+    <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
   </div>
 
 
@@ -1089,6 +1103,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         <th>Qté</th>
         <th>Long.</th>
         <th>Larg.</th>
+        <th>Mtre Lin.</th>
+        <th>Surface</th>
         <th>Prix U.</th>
         <th>Total</th>
       </tr>
@@ -1103,8 +1119,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           <td>${parseFloat(item.quantity).toFixed(2)}</td>
           <td>${parseFloat(item.v1).toFixed(2)}</td>
           <td>${parseFloat(item.v2).toFixed(2)}</td>
+          <td>${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td>${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
           <td>${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
-          <td>${parseFloat(item.totalPrice).toFixed(2)} Dh</td>
+          <td>${((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
         </tr>
       `,
         )
@@ -1172,14 +1190,14 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         <h1 style="margin:0; color:#2c5aa0;">BON LIVRAISON</h1>
         <h3 style="margin:5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
         <p style="margin:2px 0;">VENTE TOUS TYPE DE VERRE — Import / Export</p>
-        <p style="font-size:10px; margin:2px 0;">Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+        <p style="font-size:10px; margin:2px 0;">Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
         <div>
-          <p style="margin:2px 0;"><strong>Sté RachidGlass S.A.R.L A.U</strong></p>
+          <p style="margin:2px 0;"><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
           <p style="margin:2px 0;">VENTE TOUS TYPE DE VERRE — Import / Export</p>
-          <p style="margin:2px 0;">Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</p>
+          <p style="margin:2px 0;">Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
           <p style="margin:2px 0;">Email: ibaghatrachid83@gmail.com</p>
           <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</p>
           <p style="margin:2px 0;">ICE: 003013206000054</p>
@@ -1202,6 +1220,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             <th style="padding:6px; border:1px solid #2c5aa0;">Qty</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Long</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Larg</th>
+            <th style="padding:6px; border:1px solid #2c5aa0;">Mtre Lin.</th>
+            <th style="padding:6px; border:1px solid #2c5aa0;">Surface</th>
             <th style="padding:6px; border:1px solid #2c5aa0;">Total</th>
           </tr>
         </thead>
@@ -1214,7 +1234,9 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                 <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.quantity}</td>
                 <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.v1}</td>
                 <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.v2}</td>
-                <td style="border:1px solid #ddd; text-align:right; padding:5px;">${item.totalPrice.toFixed(2)} Dh</td>
+                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+                <td style="border:1px solid #ddd; text-align:right; padding:5px;">${(item.quantity || 0) * (item.unitPrice || 0)} Dh</td>
               </tr>`,
             )
             .join("")}
@@ -1335,6 +1357,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
               <th style="border:1px solid #ddd; padding:6px; text-align:center;">Qté</th>
               <th style="border:1px solid #ddd; padding:6px; text-align:center;">Long.</th>
               <th style="border:1px solid #ddd; padding:6px; text-align:center;">Larg.</th>
+              <th style="border:1px solid #ddd; padding:6px; text-align:center;">Mtre Lin.</th>
+              <th style="border:1px solid #ddd; padding:6px; text-align:center;">Surface</th>
               <th style="border:1px solid #ddd; padding:6px; text-align:right;">Prix U.</th>
               <th style="border:1px solid #ddd; padding:6px; text-align:right;">Total</th>
             </tr>
@@ -1349,8 +1373,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                 <td style="border:1px solid #ddd; padding:6px; text-align:center;">${parseFloat(item.quantity).toFixed(2)}</td>
                 <td style="border:1px solid #ddd; padding:6px; text-align:center;">${parseFloat(item.v1).toFixed(2)}</td>
                 <td style="border:1px solid #ddd; padding:6px; text-align:center;">${parseFloat(item.v2).toFixed(2)}</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
                 <td style="border:1px solid #ddd; padding:6px; text-align:right;">${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
-                <td style="border:1px solid #ddd; padding:6px; text-align:right;">${parseFloat(item.totalPrice).toFixed(2)} Dh</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:right;">${((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
               </tr>
             `,
               )
@@ -1411,7 +1437,12 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} toggle={toggle} size="xl">
+    <Modal
+      isOpen={isOpen}
+      toggle={toggle}
+      size="xl"
+      style={{ maxWidth: "90vw" }}
+    >
       <ModalHeader toggle={toggle}>
         Bon Livraison #{invoice.deliveryNumber}
         <Badge color={getStatusBadge(formData.status)} className="ms-2">
@@ -1702,6 +1733,8 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                     <th>Qty</th>
                     <th>Longueur</th>
                     <th>Largeur</th>
+                    <th>Mtre Lin.</th>
+                    <th>Surface</th>
                     <th>Prix/Unité</th>
                     <th>Total</th>
                     <th></th>
@@ -1817,6 +1850,29 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                           min="0.01"
                           step="0.01"
                         />
+                      </td>
+
+                      {/* Mtre Lin. - Calculated */}
+                      <td className="align-middle text-center">
+                        <span className="text-primary fw-bold">
+                          {(
+                            ((parseFloat(item.quantity) || 0) *
+                              (parseFloat(item.v1) || 0) *
+                              (parseFloat(item.v2) || 0)) /
+                            10000
+                          ).toFixed(4)}
+                        </span>
+                      </td>
+
+                      {/* Surface - Calculated */}
+                      <td className="align-middle text-center">
+                        <span className="text-info fw-bold">
+                          {(
+                            ((parseFloat(item.v1) || 0) *
+                              (parseFloat(item.v2) || 0)) /
+                            10000
+                          ).toFixed(4)}
+                        </span>
                       </td>
 
                       {/* Prix/Unité - Input */}

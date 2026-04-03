@@ -1,36 +1,62 @@
-import React from 'react'
+import React, { useState } from "react";
 
-const TablePagination = ({table}) => {
-    return (
-        <div className="row gy-2">
-            <div className="col-sm-12 col-md-5 p-0">
-                <div className="dataTables_info text-lg-start text-center" id="proposalList_info" role="status" aria-live="polite">Showing 1 to 10 of 10 entries</div>
-            </div>
-            <div className="col-sm-12 col-md-7 p-0">
-                <div className="dataTables_paginate paging_simple_numbers" id="proposalList_paginate">
-                    <ul className="pagination mb-0 justify-content-md-end justify-content-center">
-                        <li className={`paginate_button page-item previous ${!table.getCanPreviousPage() ? "disabled" : ""} `}
-                            onClick={() => table.previousPage()}
-                            disabled={!table.getCanPreviousPage()}
-                        >
-                            <a href="#" className="page-link">Previous</a></li>
-                        <li className="paginate_button page-item active">
-                            <a href="#" aria-controls="proposalList" data-dt-idx="0" tabIndex="0" className="page-link">
-                                {table.getState().pagination.pageIndex + 1}
-                                {/* {table.getPageCount().toLocaleString()} */}
-                            </a>
-                        </li>
-                        <li className={`paginate_button page-item next ${!table.getCanNextPage() ? "disabled" : ""}`}
-                            onClick={() => table.nextPage()}
-                            disabled={!table.getCanNextPage()}
-                        >
-                            <a href="#" className="page-link">Next</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    )
-}
+const TablePagination = ({ table }) => {
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageCount = table.getPageCount();
 
-export default TablePagination
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        flexWrap: "wrap",
+        gap: 10,
+      }}
+    >
+      {/* Info */}
+      <span style={{ fontSize: 13, color: "var(--bs-secondary-color)" }}>
+        Showing {pageIndex * table.getState().pagination.pageSize + 1}–
+        {Math.min(
+          (pageIndex + 1) * table.getState().pagination.pageSize,
+          table.getRowCount(),
+        )}{" "}
+        of {table.getRowCount()} entries
+      </span>
+
+      {/* Controls */}
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {/* Previous */}
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+        >
+          ← Previous
+        </button>
+
+        {/* Page numbers */}
+        {Array.from({ length: pageCount }, (_, i) => (
+          <button
+            key={i}
+            className={`btn btn-sm ${i === pageIndex ? "btn-primary" : "btn-outline-secondary"}`}
+            onClick={() => table.setPageIndex(i)}
+          >
+            {i + 1}
+          </button>
+        ))}
+
+        {/* Next */}
+        <button
+          className="btn btn-sm btn-outline-secondary"
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+        >
+          Next →
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default TablePagination;
