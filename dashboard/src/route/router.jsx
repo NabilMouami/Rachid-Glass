@@ -30,6 +30,7 @@ import ClientsCreate from "../pages/Clients/clients-create";
 import ClientDetails from "../pages/Clients/ClientDetails";
 import ProduitsList from "../pages/Produits/produits-list";
 import ProduitsCreate from "../pages/Produits/produits-create";
+import ProduitDetails from "../pages/Produits/ProduitDetails";
 import FornisseurDetails from "../pages/Fornisseur/FornisseurDetails";
 import FornisseurCreate from "../pages/Fornisseur/fornisseur-create";
 import FornisseursList from "../pages/Fornisseur/fornisseurs-list";
@@ -129,6 +130,10 @@ export const router = createBrowserRouter([
       {
         path: "produits",
         element: <ProduitsList />,
+      },
+      {
+        path: "produits/:id",
+        element: <ProduitDetails />,
       },
 
       {

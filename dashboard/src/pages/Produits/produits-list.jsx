@@ -19,6 +19,7 @@ import {
   FiDownload,
   FiSquare,
   FiUsers,
+  FiEye,
 } from "react-icons/fi";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
@@ -965,6 +966,13 @@ const ProduitsList = () => {
 
         return (
           <div className="hstack d-flex gap-2 justify-content-center">
+            <button
+              className="btn btn-sm btn-outline-info"
+              onClick={() => navigate(`/produits/${id}`)}
+              title="Historique"
+            >
+              <FiEye />
+            </button>
             <button
               className="btn btn-sm btn-outline-primary"
               onClick={() => handleEditClick(produit)}
