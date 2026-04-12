@@ -280,6 +280,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
+  const [statusKey, setStatusKey] = useState(0); // Force re-render of status select
   const [formData, setFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -570,6 +571,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     }));
   };
 
+  const handleStatusChange = (newStatus) => {
+    handleInputChange("status", newStatus);
+  };
+
   const handleItemChange = (index, field, value) => {
     const updatedItems = [...formData.items];
     updatedItems[index] = {
@@ -758,6 +763,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         error.response?.data?.errors?.[0]?.message ||
         "Erreur lors de la mise à jour de la Bon Livraison. Veuillez réessayer.";
       topTost(errorMessage, "error");
+      setStatusKey((prev) => prev + 1);
     } finally {
       setIsSubmitting(false);
     }
@@ -1499,9 +1505,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             <div className="form-group mb-3">
               <label className="form-label">Statut *</label>
               <select
+                key={statusKey}
                 className="form-control"
                 value={formData.status}
-                onChange={(e) => handleInputChange("status", e.target.value)}
+                onChange={(e) => handleStatusChange(e.target.value)}
               >
                 {statusOptions.map((option) => (
                   <option key={option.value} value={option.value}>

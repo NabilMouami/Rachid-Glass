@@ -209,7 +209,7 @@ const DashboardTab = ({ data, loading }) => {
   ];
 
   const statusRows = [
-    { label: "Payé(e)", facKey: "payée", blKey: "payé", acc: "green" },
+    { label: "Payé(e)", facKey: "payée", blKey: "payée", acc: "green" },
     {
       label: "Partiellement",
       facKey: "partiellement_payée",
@@ -293,8 +293,8 @@ const DashboardTab = ({ data, loading }) => {
               icon="✅"
               accent="green"
               label="BLs Payés"
-              value={blMap["payé"]?.count || 0}
-              sub={fmtPriceMAD(blMap["payé"]?.total_ttc || 0)}
+              value={blMap["payée"]?.count || 0}
+              sub={fmtPriceMAD(blMap["payée"]?.total_ttc || 0)}
             />
             <KpiCard
               icon="📤"
@@ -626,7 +626,7 @@ const BLsTab = ({ data, loading }) => {
   );
 
   const blStatuses = [
-    "payé",
+    "payée",
     "envoyée",
     "partiellement_payée",
     "brouillon",
@@ -778,8 +778,8 @@ const BLsTab = ({ data, loading }) => {
           icon="✅"
           accent="green"
           label="BLs Payés"
-          value={statusMap["payé"]?.count || 0}
-          sub={fmtPriceMAD(statusMap["payé"]?.total_ttc || 0)}
+          value={statusMap["payée"]?.count || 0}
+          sub={fmtPriceMAD(statusMap["payée"]?.total_ttc || 0)}
         />
         <KpiCard
           icon="📤"
