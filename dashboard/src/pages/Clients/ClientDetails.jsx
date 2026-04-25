@@ -38,7 +38,7 @@ function ClientDetails() {
   const [client, setClient] = useState(null);
   const [summary, setSummary] = useState(null);
   const [history, setHistory] = useState([]);
-  const [filterType, setFilterType] = useState("all");
+  const [filterType, setFilterType] = useState("bon-livraison");
   const [filterStatus, setFilterStatus] = useState("all");
 
   // New state for product search
@@ -49,7 +49,7 @@ function ClientDetails() {
   const [searchParams, setSearchParams] = useState({
     reference: "",
     exactMatch: false,
-    documentType: "all",
+    documentType: "bon-livraison",
     startDate: "",
     endDate: "",
   });
@@ -62,51 +62,62 @@ function ClientDetails() {
   }, [id]);
 
   // Fetch all products statistics for the client
-  const fetchAllProductsStats = useCallback(async (useFilters = false) => {
-    try {
-      setProductSearchLoading(true);
-      console.log("Fetching products for client:", id, "useFilters:", useFilters);
-      
-      // Build params for filtering (only if useFilters is true)
-      const params = {};
-      if (useFilters) {
-        if (searchParams.startDate) {
-          params.startDate = searchParams.startDate;
+  const fetchAllProductsStats = useCallback(
+    async (useFilters = false) => {
+      try {
+        setProductSearchLoading(true);
+        console.log(
+          "Fetching products for client:",
+          id,
+          "useFilters:",
+          useFilters,
+        );
+
+        // Build params for filtering (only if useFilters is true)
+        const params = {};
+        if (useFilters) {
+          if (searchParams.startDate) {
+            params.startDate = searchParams.startDate;
+          }
+          if (searchParams.endDate) {
+            params.endDate = searchParams.endDate;
+          }
+          if (searchParams.documentType !== "all") {
+            params.documentType = searchParams.documentType;
+          }
         }
-        if (searchParams.endDate) {
-          params.endDate = searchParams.endDate;
+
+        console.log("Params:", params);
+
+        const response = await axios.get(
+          `${config_url}/api/clients/${id}/products`,
+          {
+            params: params,
+            withCredentials: true,
+          },
+        );
+
+        console.log("API Response:", response.data);
+        setAllProductsStats(response.data);
+
+        if (response.data.products && response.data.products.length > 0) {
+          topTost(
+            `${response.data.products.length} produit(s) trouvé(s)`,
+            "success",
+          );
+        } else {
+          topTost("Aucun produit trouvé", "info");
         }
-        if (searchParams.documentType !== "all") {
-          params.documentType = searchParams.documentType;
-        }
+      } catch (error) {
+        console.error("Error fetching all products stats:", error);
+        console.error("Error response:", error.response?.data);
+        topTost("Erreur lors du chargement des statistiques", "error");
+      } finally {
+        setProductSearchLoading(false);
       }
-      
-      console.log("Params:", params);
-      
-      const response = await axios.get(
-        `${config_url}/api/clients/${id}/products`,
-        { 
-          params: params,
-          withCredentials: true 
-        }
-      );
-      
-      console.log("API Response:", response.data);
-      setAllProductsStats(response.data);
-      
-      if (response.data.products && response.data.products.length > 0) {
-        topTost(`${response.data.products.length} produit(s) trouvé(s)`, "success");
-      } else {
-        topTost("Aucun produit trouvé", "info");
-      }
-    } catch (error) {
-      console.error("Error fetching all products stats:", error);
-      console.error("Error response:", error.response?.data);
-      topTost("Erreur lors du chargement des statistiques", "error");
-    } finally {
-      setProductSearchLoading(false);
-    }
-  }, [id, searchParams]);
+    },
+    [id, searchParams],
+  );
 
   // Fetch all products stats when product search panel opens
   useEffect(() => {
@@ -155,8 +166,16 @@ function ClientDetails() {
 
   const handleProductSearch = async () => {
     // Allow search without reference if date filters are applied
-    if (!searchParams.reference.trim() && !searchParams.startDate && !searchParams.endDate && searchParams.documentType === "all") {
-      topTost("Veuillez saisir une référence produit ou appliquer des filtres", "warning");
+    if (
+      !searchParams.reference.trim() &&
+      !searchParams.startDate &&
+      !searchParams.endDate &&
+      searchParams.documentType === "all"
+    ) {
+      topTost(
+        "Veuillez saisir une référence produit ou appliquer des filtres",
+        "warning",
+      );
       return;
     }
 
@@ -204,13 +223,10 @@ function ClientDetails() {
         }
       } else {
         // Search all products with date filter
-        response = await axios.get(
-          `${config_url}/api/clients/${id}/products`,
-          {
-            params: params,
-            withCredentials: true,
-          },
-        );
+        response = await axios.get(`${config_url}/api/clients/${id}/products`, {
+          params: params,
+          withCredentials: true,
+        });
         setAllProductsStats(response.data);
         if (response.data.products && response.data.products.length > 0) {
           topTost(
@@ -232,7 +248,10 @@ function ClientDetails() {
             startDate: searchParams.startDate,
             endDate: searchParams.endDate,
             timestamp: new Date().toISOString(),
-            resultCount: response.data.summary?.totalEntries || response.data.statistics?.totalProducts || 0,
+            resultCount:
+              response.data.summary?.totalEntries ||
+              response.data.statistics?.totalProducts ||
+              0,
           },
           ...prev.slice(0, 4),
         ]);
@@ -260,7 +279,7 @@ function ClientDetails() {
     setSearchParams({
       reference: "",
       exactMatch: false,
-      documentType: "all",
+      documentType: "bon-livraison",
       startDate: "",
       endDate: "",
     });
@@ -289,7 +308,7 @@ function ClientDetails() {
     const colors = {
       brouillon: "bg-danger text-white",
       envoyé: "bg-primary text-white",
-      payé: "bg-success text-white",
+      payée: "bg-success text-white",
       partiellement_payée: "bg-warning text-dark",
       en_retard: "bg-danger text-white",
       annulée: "bg-dark text-white",
@@ -301,7 +320,7 @@ function ClientDetails() {
   const getStatusText = (status) => {
     const texts = {
       brouillon: "Non Payé",
-      payé: "Payé",
+      payée: "Payé",
       partiellement_payée: "Partiellement Payé",
       annulée: "Annulé",
     };
@@ -312,7 +331,7 @@ function ClientDetails() {
   const getStatusIcon = (status) => {
     switch (status) {
       case "payée":
-      case "payé":
+      case "payée":
       case "accepté":
         return <FiCheckCircle className="me-1" />;
       case "brouillon":
@@ -582,7 +601,9 @@ function ClientDetails() {
                 <div className="row mb-3">
                   <div className="col-md-12">
                     <div className="d-flex align-items-center gap-3 flex-wrap">
-                      <span className="text-muted small">Filtrer par date:</span>
+                      <span className="text-muted small">
+                        Filtrer par date:
+                      </span>
                       <div className="d-flex align-items-center gap-2">
                         <label className="small mb-0">Du:</label>
                         <input
@@ -630,7 +651,9 @@ function ClientDetails() {
                           </>
                         )}
                       </button>
-                      {(searchParams.startDate || searchParams.endDate || searchParams.documentType !== "all") && (
+                      {(searchParams.startDate ||
+                        searchParams.endDate ||
+                        searchParams.documentType !== "all") && (
                         <button
                           className="btn btn-sm btn-outline-secondary"
                           onClick={() => {
@@ -638,7 +661,7 @@ function ClientDetails() {
                               ...searchParams,
                               startDate: "",
                               endDate: "",
-                              documentType: "all",
+                              documentType: "bon-livraison",
                             });
                             setProductSearchData(null);
                             fetchAllProductsStats(false); // Fetch all without filters
@@ -1049,14 +1072,18 @@ function ClientDetails() {
                 ) : (
                   /* Initial search state - show all products when loaded */
                   <>
-                    {productSearchLoading || (!allProductsStats && !productSearchData) ? (
+                    {productSearchLoading ||
+                    (!allProductsStats && !productSearchData) ? (
                       <div className="text-center py-5">
-                        <div className="spinner-border text-primary" role="status">
+                        <div
+                          className="spinner-border text-primary"
+                          role="status"
+                        >
                           <span className="visually-hidden">Chargement...</span>
                         </div>
                         <p className="mt-3">Chargement des produits...</p>
                       </div>
-                    ) : (allProductsStats && allProductsStats.products) ? (
+                    ) : allProductsStats && allProductsStats.products ? (
                       <>
                         {/* Statistics Cards for All Products */}
                         <div className="row mb-4">
@@ -1065,11 +1092,19 @@ function ClientDetails() {
                               <div className="card-body">
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div>
-                                    <h6 className="text-muted mb-1">Total Produits</h6>
-                                    <h3 className="mb-0">{allProductsStats.statistics?.totalProducts || 0}</h3>
+                                    <h6 className="text-muted mb-1">
+                                      Total Produits
+                                    </h6>
+                                    <h3 className="mb-0">
+                                      {allProductsStats.statistics
+                                        ?.totalProducts || 0}
+                                    </h3>
                                   </div>
                                   <div className="bg-primary bg-opacity-10 p-3 rounded">
-                                    <FiPackage size={24} className="text-white" />
+                                    <FiPackage
+                                      size={24}
+                                      className="text-white"
+                                    />
                                   </div>
                                 </div>
                               </div>
@@ -1081,11 +1116,19 @@ function ClientDetails() {
                               <div className="card-body">
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div>
-                                    <h6 className="text-muted mb-1">Quantité Totale</h6>
-                                    <h3 className="mb-0">{allProductsStats.statistics?.totalQuantity || 0}</h3>
+                                    <h6 className="text-muted mb-1">
+                                      Quantité Totale
+                                    </h6>
+                                    <h3 className="mb-0">
+                                      {allProductsStats.statistics
+                                        ?.totalQuantity || 0}
+                                    </h3>
                                   </div>
                                   <div className="bg-info bg-opacity-10 p-3 rounded">
-                                    <FiTrendingUp size={24} className="text-white" />
+                                    <FiTrendingUp
+                                      size={24}
+                                      className="text-white"
+                                    />
                                   </div>
                                 </div>
                               </div>
@@ -1097,11 +1140,21 @@ function ClientDetails() {
                               <div className="card-body">
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div>
-                                    <h6 className="text-muted mb-1">Montant Total</h6>
-                                    <h3 className="mb-0">{formatCurrency(allProductsStats.statistics?.totalAmount || 0)}</h3>
+                                    <h6 className="text-muted mb-1">
+                                      Montant Total
+                                    </h6>
+                                    <h3 className="mb-0">
+                                      {formatCurrency(
+                                        allProductsStats.statistics
+                                          ?.totalAmount || 0,
+                                      )}
+                                    </h3>
                                   </div>
                                   <div className="bg-warning bg-opacity-10 p-3 rounded">
-                                    <FiDollarSign size={24} className="text-white" />
+                                    <FiDollarSign
+                                      size={24}
+                                      className="text-white"
+                                    />
                                   </div>
                                 </div>
                               </div>
@@ -1113,11 +1166,21 @@ function ClientDetails() {
                               <div className="card-body">
                                 <div className="d-flex justify-content-between align-items-center">
                                   <div>
-                                    <h6 className="text-muted mb-1">Moyenne/Produit</h6>
-                                    <h3 className="mb-0">{formatCurrency(allProductsStats.statistics?.averagePerProduct || 0)}</h3>
+                                    <h6 className="text-muted mb-1">
+                                      Moyenne/Produit
+                                    </h6>
+                                    <h3 className="mb-0">
+                                      {formatCurrency(
+                                        allProductsStats.statistics
+                                          ?.averagePerProduct || 0,
+                                      )}
+                                    </h3>
                                   </div>
                                   <div className="bg-success bg-opacity-10 p-3 rounded">
-                                    <FiTrendingUp size={24} className="text-white" />
+                                    <FiTrendingUp
+                                      size={24}
+                                      className="text-white"
+                                    />
                                   </div>
                                 </div>
                               </div>
@@ -1133,7 +1196,8 @@ function ClientDetails() {
                                 <div className="card-header">
                                   <h6 className="card-title mb-0">
                                     <FiPackage className="me-2" />
-                                    Tous les Produits ({allProductsStats.products.length})
+                                    Tous les Produits (
+                                    {allProductsStats.products.length})
                                   </h6>
                                 </div>
                                 <div className="card-body">
@@ -1143,31 +1207,63 @@ function ClientDetails() {
                                         <tr>
                                           <th>Produit</th>
                                           <th>Référence</th>
-                                          <th className="text-center">Quantité Totale</th>
-                                          <th className="text-end">Montant Total</th>
-                                          <th className="text-center">Première Achat</th>
-                                          <th className="text-center">Dernière Achat</th>
+                                          <th className="text-center">
+                                            Quantité Totale
+                                          </th>
+                                          <th className="text-end">
+                                            Montant Total
+                                          </th>
+                                          <th className="text-center">
+                                            Première Achat
+                                          </th>
+                                          <th className="text-center">
+                                            Dernière Achat
+                                          </th>
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {allProductsStats.products.map((product, index) => (
-                                          <tr key={index}>
-                                            <td><strong>{product.product?.designation}</strong></td>
-                                            <td><span className="text-muted">{product.product?.reference}</span></td>
-                                            <td className="text-center">
-                                              <span className="badge bg-primary">{product.totalQuantity}</span>
-                                            </td>
-                                            <td className="text-end">
-                                              <strong className="text-success">{formatCurrency(product.totalAmount)}</strong>
-                                            </td>
-                                            <td className="text-center">
-                                              <small className="text-muted">{formatDateShort(product.firstPurchase)}</small>
-                                            </td>
-                                            <td className="text-center">
-                                              <small className="text-muted">{formatDateShort(product.lastPurchase)}</small>
-                                            </td>
-                                          </tr>
-                                        ))}
+                                        {allProductsStats.products.map(
+                                          (product, index) => (
+                                            <tr key={index}>
+                                              <td>
+                                                <strong>
+                                                  {product.product?.designation}
+                                                </strong>
+                                              </td>
+                                              <td>
+                                                <span className="text-muted">
+                                                  {product.product?.reference}
+                                                </span>
+                                              </td>
+                                              <td className="text-center">
+                                                <span className="badge bg-primary">
+                                                  {product.totalQuantity}
+                                                </span>
+                                              </td>
+                                              <td className="text-end">
+                                                <strong className="text-success">
+                                                  {formatCurrency(
+                                                    product.totalAmount,
+                                                  )}
+                                                </strong>
+                                              </td>
+                                              <td className="text-center">
+                                                <small className="text-muted">
+                                                  {formatDateShort(
+                                                    product.firstPurchase,
+                                                  )}
+                                                </small>
+                                              </td>
+                                              <td className="text-center">
+                                                <small className="text-muted">
+                                                  {formatDateShort(
+                                                    product.lastPurchase,
+                                                  )}
+                                                </small>
+                                              </td>
+                                            </tr>
+                                          ),
+                                        )}
                                       </tbody>
                                     </table>
                                   </div>
@@ -1190,7 +1286,8 @@ function ClientDetails() {
                         <FiBox size={48} className="text-muted mb-3" />
                         <h5>Aucun produit trouvé</h5>
                         <p className="text-muted mb-4">
-                          Utilisez les filtres ci-dessus ou entrez une référence pour rechercher.
+                          Utilisez les filtres ci-dessus ou entrez une référence
+                          pour rechercher.
                         </p>
                       </div>
                     )}
@@ -1211,9 +1308,7 @@ function ClientDetails() {
                 <div className="d-flex justify-content-between align-items-center">
                   <div>
                     <h6 className="text-muted mb-1">Total Devis</h6>
-                    <h3 className="mb-0">
-                      {summary?.counts?.devis || 0}
-                    </h3>
+                    <h3 className="mb-0">{summary?.counts?.devis || 0}</h3>
                     <small className="text-muted">
                       {formatCurrency(summary?.financial?.totalSales || 0)}
                     </small>
@@ -1250,9 +1345,7 @@ function ClientDetails() {
                 <div className="d-flex justify-content-between align-items-center">
                   <div>
                     <h6 className="text-muted mb-1">Total Factures</h6>
-                    <h3 className="mb-0">
-                      {summary?.counts?.factures || 0}
-                    </h3>
+                    <h3 className="mb-0">{summary?.counts?.factures || 0}</h3>
                   </div>
                   <div className="bg-success bg-opacity-10 p-3 rounded">
                     <FiDollarSign size={24} className="text-white" />
@@ -1269,13 +1362,13 @@ function ClientDetails() {
                   <div>
                     <h6 className="text-muted mb-1">En Attente</h6>
                     <h3 className="mb-0">
-                      {formatCurrency(summary?.financial?.totalOutstanding || 0)}
+                      {formatCurrency(
+                        summary?.financial?.totalOutstanding || 0,
+                      )}
                     </h3>
                     <small className="text-muted">
-                      {summary?.financial?.paymentPercentage?.toFixed(
-                        1,
-                      ) || 0}
-                      % payé
+                      {summary?.financial?.paymentPercentage?.toFixed(1) || 0}%
+                      payé
                     </small>
                   </div>
                   <div className="bg-warning bg-opacity-10 p-3 rounded">
@@ -1312,17 +1405,13 @@ function ClientDetails() {
                           <>
                             <p className="mb-1">
                               <strong>
-                                {
-                                  summary.latestDocuments.devis
-                                    .devisNumber
-                                }
+                                {summary.latestDocuments.devis.devisNumber}
                               </strong>
                             </p>
                             <p className="mb-1 text-muted small">
                               <FiCalendar className="me-1" />
                               {formatDate(
-                                summary.latestDocuments.devis
-                                  .issueDate,
+                                summary.latestDocuments.devis.issueDate,
                               )}
                             </p>
                             <p className="mb-2">
@@ -1369,8 +1458,7 @@ function ClientDetails() {
                             <p className="mb-1 text-muted small">
                               <FiCalendar className="me-1" />
                               {formatDate(
-                                summary.latestDocuments.bonLivraison
-                                  .issueDate,
+                                summary.latestDocuments.bonLivraison.issueDate,
                               )}
                             </p>
                             <p className="mb-2">
@@ -1382,13 +1470,9 @@ function ClientDetails() {
                               className={`badge bg-${getStatusColor(summary.latestDocuments.bonLivraison.status)}`}
                             >
                               {getStatusIcon(
-                                summary.latestDocuments.bonLivraison
-                                  .status,
+                                summary.latestDocuments.bonLivraison.status,
                               )}
-                              {
-                                summary.latestDocuments.bonLivraison
-                                  .status
-                              }
+                              {summary.latestDocuments.bonLivraison.status}
                             </span>
                           </>
                         ) : (
@@ -1412,17 +1496,13 @@ function ClientDetails() {
                           <>
                             <p className="mb-1">
                               <strong>
-                                {
-                                  summary.latestDocuments.facture
-                                    .invoiceNumber
-                                }
+                                {summary.latestDocuments.facture.invoiceNumber}
                               </strong>
                             </p>
                             <p className="mb-1 text-muted small">
                               <FiCalendar className="me-1" />
                               {formatDate(
-                                summary.latestDocuments.facture
-                                  .issueDate,
+                                summary.latestDocuments.facture.issueDate,
                               )}
                             </p>
                             <p className="mb-2">
@@ -1468,9 +1548,9 @@ function ClientDetails() {
                     value={filterType}
                     onChange={(e) => setFilterType(e.target.value)}
                   >
+                    <option value="bon-livraison">Bon de Livraison</option>
                     <option value="all">Tous les types</option>
                     <option value="devis">Devis</option>
-                    <option value="bon-livraison">Bon de Livraison</option>
                     <option value="facture">Facture</option>
                   </select>
 
@@ -1543,7 +1623,12 @@ function ClientDetails() {
                             </td>
                             <td>
                               <span className="fw-semibold">
-                                {formatCurrency(doc.montant_ttc || doc.total || doc.totalTTC || 0)}
+                                {formatCurrency(
+                                  doc.montant_ttc ||
+                                    doc.total ||
+                                    doc.totalTTC ||
+                                    0,
+                                )}
                               </span>
                             </td>
                             <td>

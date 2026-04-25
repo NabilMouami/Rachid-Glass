@@ -94,6 +94,7 @@ const FactureCreate = () => {
   const [includeTvaInPrice, setIncludeTvaInPrice] = useState(true); // True = TTC, False = HT
   const [ice, setIce] = useState("");
   const [ste, setSte] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
 
   const selectRefs = useRef({});
   const navigate = useNavigate();
@@ -501,6 +502,7 @@ const FactureCreate = () => {
     setIncludeTvaInPrice(true);
     setStartDate(new Date()); // Reset to current date/time
     setPriceAlerts({});
+    setInvoiceNumber("");
   };
 
   const validateForm = () => {
@@ -595,6 +597,7 @@ const FactureCreate = () => {
 
       // Prepare invoice data - match backend expectations
       const invoiceData = {
+        invoiceNumber: invoiceNumber || "",
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         issueDate: startDate, // This includes both date and time
@@ -893,6 +896,23 @@ const FactureCreate = () => {
                       }),
                     }}
                   />
+                </div>
+                <div className="col-md-6">
+                  <div className="form-group">
+                    <label className="form-label">
+                      Numéro de Facture (Optionnel):
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Laisser vide pour générer automatiquement"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                    />
+                    <small className="text-muted">
+                      Si vide, un numéro sera généré automatiquement
+                    </small>
+                  </div>
                 </div>
               </div>
 

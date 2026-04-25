@@ -324,15 +324,26 @@ const DevisTable = () => {
   };
 
   const handleDevisUpdate = (updatedDevis) => {
+    const updatedTotal = parseFloat(updatedDevis.total) || 0;
+
     setDevis((prev) =>
       prev.map((d) =>
         d.id === updatedDevis.id
           ? {
               ...d,
-              customerName: updatedDevis.customerName,
-              customerPhone: updatedDevis.customerPhone,
-              status: updatedDevis.status,
-              total: parseFloat(updatedDevis.total) || 0,
+              customerName: updatedDevis.customerName || d.customerName,
+              customerPhone: updatedDevis.customerPhone || d.customerPhone,
+              status: updatedDevis.status || d.status,
+              total: updatedTotal,
+              originalData: {
+                ...d.originalData,
+                customerName:
+                  updatedDevis.customerName || d.originalData.customerName,
+                customerPhone:
+                  updatedDevis.customerPhone || d.originalData.customerPhone,
+                status: updatedDevis.status || d.originalData.status,
+                total: updatedTotal,
+              },
             }
           : d,
       ),
@@ -343,10 +354,19 @@ const DevisTable = () => {
         d.id === updatedDevis.id
           ? {
               ...d,
-              customerName: updatedDevis.customerName,
-              customerPhone: updatedDevis.customerPhone,
-              status: updatedDevis.status,
-              total: parseFloat(updatedDevis.total) || 0,
+              customerName: updatedDevis.customerName || d.customerName,
+              customerPhone: updatedDevis.customerPhone || d.customerPhone,
+              status: updatedDevis.status || d.status,
+              total: updatedTotal,
+              originalData: {
+                ...d.originalData,
+                customerName:
+                  updatedDevis.customerName || d.originalData.customerName,
+                customerPhone:
+                  updatedDevis.customerPhone || d.originalData.customerPhone,
+                status: updatedDevis.status || d.originalData.status,
+                total: updatedTotal,
+              },
             }
           : d,
       ),

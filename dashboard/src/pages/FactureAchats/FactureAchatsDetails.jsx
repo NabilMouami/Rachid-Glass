@@ -22,6 +22,7 @@ import {
   FiPercent,
 } from "react-icons/fi";
 import AsyncSelect from "react-select/async";
+import Select from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import axios from "axios";
@@ -178,6 +179,9 @@ const FactureAchatsDetailsPage = () => {
   const [facture, setFacture] = useState(null);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState("");
+  const [loadingSuppliers, setLoadingSuppliers] = useState(true);
   const [formData, setFormData] = useState({
     supplierName: "",
     supplierPhone: "",
@@ -195,6 +199,51 @@ const FactureAchatsDetailsPage = () => {
     ice: "",
     ste: "",
   });
+
+  // Fetch suppliers/clients
+  useEffect(() => {
+    const fetchSuppliers = async () => {
+      setLoadingSuppliers(true);
+      try {
+        const response = await axios.get(`${config_url}/api/clients`);
+        const supplierOptions = (response.data?.clients || []).map((client) => {
+          const refPart = client.reference ? `(${client.reference}) ` : "";
+          return {
+            value: client.id,
+            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+            searchText: [
+              client.nom_complete?.toLowerCase() || "",
+              client.telephone?.toLowerCase() || "",
+              client.reference?.toLowerCase() || "",
+              client.email?.toLowerCase() || "",
+            ].join(" "),
+            ...client,
+          };
+        });
+        setSuppliers(supplierOptions);
+      } catch (error) {
+        console.error("Error fetching suppliers:", error);
+      } finally {
+        setLoadingSuppliers(false);
+      }
+    };
+    fetchSuppliers();
+  }, []);
+
+  // Handle supplier selection
+  const handleSupplierSelect = (supplierId) => {
+    setSelectedSupplierId(supplierId);
+    const selectedSupplier = suppliers.find((s) => s.value == supplierId);
+    if (selectedSupplier) {
+      setFormData((prev) => ({
+        ...prev,
+        supplierName: selectedSupplier.nom_complete || "",
+        supplierPhone: selectedSupplier.telephone || "",
+        supplierEmail: selectedSupplier.email || "",
+        ice: selectedSupplier.ice || "",
+      }));
+    }
+  };
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -354,38 +403,35 @@ const FactureAchatsDetailsPage = () => {
     return (
       <Container className="py-5">
         <Alert color="danger">Facture achat introuvable</Alert>
-        <Button color="primary" onClick={() => navigate("/facture-achat/list")}>
-          <FiArrowLeft className="me-2" /> Retour
-        </Button>
       </Container>
     );
   }
 
-// Update the calculation functions
-// Update the calculation functions
-const subTotal = formData.items.reduce(
-  (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
-  0,
-);
+  // Update the calculation functions
+  // Update the calculation functions
+  const subTotal = formData.items.reduce(
+    (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
+    0,
+  );
 
-const calculateDiscount = () => {
-  if (formData.discountType === "percentage") {
-    return (subTotal * formData.discountValue) / 100;
-  }
-  return formData.discountValue;
-};
+  const calculateDiscount = () => {
+    if (formData.discountType === "percentage") {
+      return (subTotal * formData.discountValue) / 100;
+    }
+    return formData.discountValue;
+  };
 
-const discount = calculateDiscount();
+  const discount = calculateDiscount();
 
-// Calculate totals
-// Total HT = Subtotal - Discount (this is the base amount before TVA)
-const totalHT = Math.max(0, subTotal - discount);
+  // Calculate totals
+  // Total HT = Subtotal - Discount (this is the base amount before TVA)
+  const totalHT = Math.max(0, subTotal - discount);
 
-// TVA Amount = Total HT × TVA Rate
-const tvaAmount = totalHT * (formData.tvaRate / 100);
+  // TVA Amount = Total HT × TVA Rate
+  const tvaAmount = totalHT * (formData.tvaRate / 100);
 
-// NET TTC À PAYER = Total HT + TVA Amount
-const totalTTC = totalHT + tvaAmount;
+  // NET TTC À PAYER = Total HT + TVA Amount
+  const totalTTC = totalHT + tvaAmount;
 
   const getStatusColor = (s) => {
     switch (s) {
@@ -477,83 +523,83 @@ const totalTTC = totalHT + tvaAmount;
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
 
-const handleSubmit = async () => {
-  if (!formData.supplierName.trim()) {
-    topTost("Le nom du fournisseur est requis", "error");
-    return;
-  }
+  const handleSubmit = async () => {
+    if (!formData.supplierName.trim()) {
+      topTost("Le nom du fournisseur est requis", "error");
+      return;
+    }
 
-  if (!formData.items || formData.items.length === 0) {
-    topTost("La facture doit avoir au moins un article", "error");
-    return;
-  }
+    if (!formData.items || formData.items.length === 0) {
+      topTost("La facture doit avoir au moins un article", "error");
+      return;
+    }
 
-  try {
-    // Recalculate totals to ensure consistency
-    const currentSubTotal = formData.items.reduce(
-      (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
-      0,
-    );
-    
-    const currentDiscount = formData.discountType === "percentage" 
-      ? (currentSubTotal * formData.discountValue) / 100 
-      : formData.discountValue;
-    
-    // Total HT = Subtotal - Discount
-    const currentTotalHT = Math.max(0, currentSubTotal - currentDiscount);
-    
-    // TVA Amount = Total HT × TVA Rate
-    const currentTvaAmount = currentTotalHT * (formData.tvaRate / 100);
-    
-    // NET TTC À PAYER = Total HT + TVA Amount
-    const currentTotalTTC = currentTotalHT + currentTvaAmount;
+    try {
+      // Recalculate totals to ensure consistency
+      const currentSubTotal = formData.items.reduce(
+        (sum, item) => sum + (item.quantity || 0) * (item.unitPrice || 0),
+        0,
+      );
 
-    const payload = {
-      supplierName: formData.supplierName.trim(),
-      supplierPhone: formData.supplierPhone.trim(),
-      supplierEmail: formData.supplierEmail.trim(),
-      issueDate: formData.issueDate.toISOString(),
-      dueDate: formData.dueDate ? formData.dueDate.toISOString() : null,
-      notes: formData.notes,
-      status: formData.status,
-      discountType: formData.discountType,
-      discountValue: parseFloat(formData.discountValue) || 0,
-      paymentType: formData.paymentType,
-      tvaRate: formData.tvaRate,
-      includeTvaInPrice: formData.includeTvaInPrice,
-      subTotal: currentSubTotal,
-      discountAmount: currentDiscount,
-      totalHT: currentTotalHT,
-      totalTTC: currentTotalTTC,
-      tvaAmount: currentTvaAmount,
-      items: formData.items.map((item) => ({
-        id: item.id?.toString().startsWith("temp-") ? undefined : item.id,
-        produit_id: item.produit_id,
-        quantite: item.quantity,
-        prix_unitaire: item.unitPrice,
-        remise_ligne: 0,
-        total_ligne: item.totalPrice,
-      })),
-      ice: formData.ice || "",
-      ste: formData.ste || "",
-    };
+      const currentDiscount =
+        formData.discountType === "percentage"
+          ? (currentSubTotal * formData.discountValue) / 100
+          : formData.discountValue;
 
-    await axios.put(
-      `${config_url}/api/factures-achat/${facture.id}`,
-      payload,
-    );
+      // Total HT = Subtotal - Discount
+      const currentTotalHT = Math.max(0, currentSubTotal - currentDiscount);
 
-    topTost("Facture achat mise à jour avec succès!", "success");
-    navigate("/facture-achat/list");
-  } catch (error) {
-    console.error("Error updating invoice:", error);
-    topTost(
-      error.response?.data?.message || "Erreur lors de la mise à jour",
-      "error",
-    );
-  }
-};
+      // TVA Amount = Total HT × TVA Rate
+      const currentTvaAmount = currentTotalHT * (formData.tvaRate / 100);
 
+      // NET TTC À PAYER = Total HT + TVA Amount
+      const currentTotalTTC = currentTotalHT + currentTvaAmount;
+
+      const payload = {
+        supplierName: formData.supplierName.trim(),
+        supplierPhone: formData.supplierPhone.trim(),
+        supplierEmail: formData.supplierEmail.trim(),
+        issueDate: formData.issueDate.toISOString(),
+        dueDate: formData.dueDate ? formData.dueDate.toISOString() : null,
+        notes: formData.notes,
+        status: formData.status,
+        discountType: formData.discountType,
+        discountValue: parseFloat(formData.discountValue) || 0,
+        paymentType: formData.paymentType,
+        tvaRate: formData.tvaRate,
+        includeTvaInPrice: formData.includeTvaInPrice,
+        subTotal: currentSubTotal,
+        discountAmount: currentDiscount,
+        totalHT: currentTotalHT,
+        totalTTC: currentTotalTTC,
+        tvaAmount: currentTvaAmount,
+        items: formData.items.map((item) => ({
+          id: item.id?.toString().startsWith("temp-") ? undefined : item.id,
+          produit_id: item.produit_id,
+          quantite: item.quantity,
+          prix_unitaire: item.unitPrice,
+          remise_ligne: 0,
+          total_ligne: item.totalPrice,
+        })),
+        ice: formData.ice || "",
+        ste: formData.ste || "",
+      };
+
+      await axios.put(
+        `${config_url}/api/factures-achat/${facture.id}`,
+        payload,
+      );
+
+      topTost("Facture achat mise à jour avec succès!", "success");
+      navigate("/facture-achat/list");
+    } catch (error) {
+      console.error("Error updating invoice:", error);
+      topTost(
+        error.response?.data?.message || "Erreur lors de la mise à jour",
+        "error",
+      );
+    }
+  };
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
@@ -741,19 +787,6 @@ const handleSubmit = async () => {
     </div>
   </div>
 
-  <div class="footer">
-    <p style="margin:2px 0;">
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p style="margin:2px 0;">
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-  </div>
-
   <script>
     window.onload = function () {
       window.print();
@@ -908,9 +941,6 @@ const handleSubmit = async () => {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <Button color="light" onClick={() => navigate("/facture-achat/list")}>
-            <FiArrowLeft className="me-2" /> Retour
-          </Button>
           <h3 className="mt-3 mb-1">
             Facture Achat #{facture.invoiceNumber}
             <Badge color={getStatusColor(formData.status)} className="ms-3">
@@ -940,6 +970,33 @@ const handleSubmit = async () => {
               <FiUser className="me-2" /> Fournisseur
             </h5>
             <div className="mt-2">
+              <div className="form-group mb-3">
+                <label className="form-label">
+                  Sélectionner un Fournisseur
+                </label>
+                <Select
+                  options={suppliers}
+                  value={
+                    selectedSupplierId
+                      ? suppliers.find((s) => s.value == selectedSupplierId)
+                      : null
+                  }
+                  onChange={(option) =>
+                    handleSupplierSelect(option?.value || "")
+                  }
+                  placeholder="Choisissez un fournisseur..."
+                  isClearable
+                  isSearchable
+                  isLoading={loadingSuppliers}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      backgroundColor: "#fff",
+                      borderColor: "#ddd",
+                    }),
+                  }}
+                />
+              </div>
               <div className="form-group mb-3">
                 <label className="form-label">Nom Fournisseur *</label>
                 <input
@@ -1316,45 +1373,45 @@ const handleSubmit = async () => {
         </div>
       </Card>
 
-<Card className="p-3">
-  <h5>Résumé financier</h5>
-  <Row className="mt-3">
-    <Col md={6}>
-      <div className="p-3 bg-light rounded">
-        <div className="d-flex justify-content-between mb-2">
-          <span>Sous-total:</span>
-          <strong>{formatAmount(subTotal)} Dh</strong>
-        </div>
-        {discount > 0 && (
-          <div className="d-flex justify-content-between mb-2 text-danger">
-            <span>Remise:</span>
-            <span>-{formatAmount(discount)} Dh</span>
-          </div>
-        )}
-        <div className="d-flex justify-content-between mb-2 fw-bold">
-          <span>Total HT:</span>
-          <strong>{formatAmount(totalHT)} Dh</strong>
-        </div>
-        <div className="d-flex justify-content-between mb-2">
-          <span>TVA ({formData.tvaRate}%):</span>
-          <strong>{formatAmount(tvaAmount)} Dh</strong>
-          <span className="text-muted small">
-            ({formatAmount(totalHT)} × {formData.tvaRate}%)
-          </span>
-        </div>
-        <div className="d-flex justify-content-between mb-2 fw-bold border-top pt-2">
-          <span>NET TTC À PAYER:</span>
-          <span className="text-primary fs-5">
-            {formatAmount(totalTTC)} Dh
-          </span>
-        </div>
-        <div className="mt-3 small fst-italic">
-          <strong>{totalToFrenchText(totalTTC)}</strong>
-        </div>
-      </div>
-    </Col>
-  </Row>
-</Card>
+      <Card className="p-3">
+        <h5>Résumé financier</h5>
+        <Row className="mt-3">
+          <Col md={6}>
+            <div className="p-3 bg-light rounded">
+              <div className="d-flex justify-content-between mb-2">
+                <span>Sous-total:</span>
+                <strong>{formatAmount(subTotal)} Dh</strong>
+              </div>
+              {discount > 0 && (
+                <div className="d-flex justify-content-between mb-2 text-danger">
+                  <span>Remise:</span>
+                  <span>-{formatAmount(discount)} Dh</span>
+                </div>
+              )}
+              <div className="d-flex justify-content-between mb-2 fw-bold">
+                <span>Total HT:</span>
+                <strong>{formatAmount(totalHT)} Dh</strong>
+              </div>
+              <div className="d-flex justify-content-between mb-2">
+                <span>TVA ({formData.tvaRate}%):</span>
+                <strong>{formatAmount(tvaAmount)} Dh</strong>
+                <span className="text-muted small">
+                  ({formatAmount(totalHT)} × {formData.tvaRate}%)
+                </span>
+              </div>
+              <div className="d-flex justify-content-between mb-2 fw-bold border-top pt-2">
+                <span>NET TTC À PAYER:</span>
+                <span className="text-primary fs-5">
+                  {formatAmount(totalTTC)} Dh
+                </span>
+              </div>
+              <div className="mt-3 small fst-italic">
+                <strong>{totalToFrenchText(totalTTC)}</strong>
+              </div>
+            </div>
+          </Col>
+        </Row>
+      </Card>
     </Container>
   );
 };

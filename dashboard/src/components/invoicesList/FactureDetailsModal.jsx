@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import AsyncSelect from "react-select/async";
+import Select from "react-select";
 import { components } from "react-select";
 import {
   Modal,
@@ -27,6 +28,521 @@ import Swal from "sweetalert2";
 
 import withReactContent from "sweetalert2-react-content";
 const MySwal = withReactContent(Swal);
+
+// ─── Invoice HTML Template ──────────────────────────────────────────────────
+// Shared template used by both Print and PDF generation
+const buildInvoiceHTML = ({
+  invoice,
+  formData,
+  subTotal,
+  discount,
+  totalHT,
+  tvaAmount,
+  totalTTC,
+  totalAdvancement,
+  remainingAmount,
+}) => {
+  const formatDate = (date) => {
+    if (!date) return "";
+    return new Date(date).toLocaleDateString("fr-FR");
+  };
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return d.toLocaleString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const itemsRows = formData.items
+    .map(
+      (item, i) => `
+      <tr class="${i % 2 === 0 ? "row-even" : "row-odd"}">
+        <td class="td-center">${parseFloat(item.quantity || 0).toFixed(2)}</td>
+        <td class="td-center">${parseFloat(item.v1 || 1).toFixed(2)}</td>
+        <td class="td-center">${parseFloat(item.v2 || 1).toFixed(2)}</td>
+        <td>${item.produit?.designation || item.designation || "-"}</td>
+        <td class="td-right">${parseFloat(item.unitPrice || 0).toFixed(2)}</td>
+        ${item.remise_ligne > 0 ? `<td class="td-right">${parseFloat(item.remise_ligne).toFixed(2)}</td>` : `<td class="td-center td-muted">—</td>`}
+        <td class="td-right td-bold">${parseFloat(item.totalPrice || 0).toFixed(2)}</td>
+      </tr>
+    `,
+    )
+    .join("");
+
+  const advancementsSection =
+    formData.advancements && formData.advancements.length > 0
+      ? `
+      <div class="section-block">
+        <div class="section-title">Historique des Acomptes</div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Montant (Dh)</th>
+              <th>Méthode</th>
+              <th>Référence</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${formData.advancements
+              .map(
+                (a) => `
+              <tr>
+                <td>${formatDate(a.paymentDate)}</td>
+                <td class="td-right td-bold">${parseFloat(a.amount).toFixed(2)} Dh</td>
+                <td>${a.paymentMethod || "—"}</td>
+                <td>${a.reference || "—"}</td>
+                <td>${a.notes || "—"}</td>
+              </tr>
+            `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+      : "";
+
+  return `
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Facture ${invoice.invoiceNumber}</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 10.5px;
+      color: #1a1a2e;
+      background: #fff;
+      padding: 0;
+      margin: 0;
+    }
+
+    /* ── Page wrapper ── */
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      padding: 12mm 14mm 30mm 14mm;
+      position: relative;
+      background: #fff;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #1a3a6e;
+      margin-bottom: 14px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .logo-box {
+      width: 54px;
+      height: 54px;
+      background: linear-gradient(135deg, #1a3a6e 0%, #2c5aa0 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-box span {
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    .company-name {
+      font-size: 17px;
+      font-weight: 800;
+      color: #1a3a6e;
+      letter-spacing: 0.3px;
+    }
+    .company-sub {
+      font-size: 9.5px;
+      color: #4a6fa5;
+      margin-top: 2px;
+      font-weight: 500;
+    }
+    .company-arabic {
+      font-size: 9px;
+      color: #6b7a99;
+      margin-top: 2px;
+      direction: rtl;
+    }
+    .header-right {
+      text-align: right;
+    }
+    .invoice-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #1a3a6e, #2c5aa0);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      padding: 5px 16px;
+      border-radius: 6px;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .invoice-num {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1a3a6e;
+    }
+    .invoice-date {
+      font-size: 9.5px;
+      color: #6b7a99;
+      margin-top: 3px;
+    }
+
+    /* ── Info Band ── */
+    .info-band {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .info-card {
+      flex: 1;
+      background: #f4f7fb;
+      border: 1px solid #dbe4f0;
+      border-radius: 7px;
+      padding: 8px 12px;
+    }
+    .info-card-title {
+      font-size: 8.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #2c5aa0;
+      margin-bottom: 4px;
+      border-bottom: 1px solid #dbe4f0;
+      padding-bottom: 3px;
+    }
+    .info-card p {
+      margin: 2px 0;
+      font-size: 9.5px;
+      color: #2a2a3e;
+    }
+    .info-card p strong {
+      color: #1a3a6e;
+    }
+    .info-card.highlight {
+      background: linear-gradient(135deg, #eef3fb 0%, #dce8f8 100%);
+      border-color: #2c5aa0;
+    }
+
+    /* ── Items Table ── */
+    .section-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #2c5aa0;
+      margin-bottom: 5px;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9.5px;
+      margin-bottom: 14px;
+    }
+    .data-table thead tr {
+      background: linear-gradient(90deg, #1a3a6e 0%, #2c5aa0 100%);
+      color: #fff;
+    }
+    .data-table thead th {
+      padding: 7px 8px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 9px;
+      letter-spacing: 0.4px;
+    }
+    .data-table thead th.th-center { text-align: center; }
+    .data-table thead th.th-right { text-align: right; }
+
+    .row-even { background: #fff; }
+    .row-odd  { background: #f7f9fd; }
+    .data-table tbody tr { border-bottom: 1px solid #e8edf5; }
+    .data-table tbody td { padding: 6px 8px; vertical-align: middle; }
+
+    .td-center { text-align: center; }
+    .td-right  { text-align: right; }
+    .td-bold   { font-weight: 700; }
+    .td-muted  { color: #aaa; }
+
+    /* ── Totals block ── */
+    .totals-wrapper {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 14px;
+    }
+    .totals-box {
+      width: 200px;
+      border: 1px solid #dbe4f0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .totals-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 10px;
+      font-size: 9.5px;
+      border-bottom: 1px solid #eef1f7;
+    }
+    .totals-row:last-child { border-bottom: none; }
+    .totals-row.highlight {
+      background: linear-gradient(90deg, #1a3a6e, #2c5aa0);
+      color: #fff;
+      font-weight: 700;
+      font-size: 10.5px;
+    }
+    .totals-row.remaining {
+      background: #fff8e1;
+      font-weight: 700;
+      font-size: 10px;
+      color: #c0392b;
+    }
+    .totals-row.paid {
+      background: #e8f5e9;
+      color: #1b5e20;
+      font-weight: 600;
+    }
+    .totals-row .lbl { color: inherit; }
+    .totals-row .val { font-weight: 700; }
+
+    /* ── Amount in words ── */
+    .amount-words {
+      background: #f4f7fb;
+      border: 1px solid #dbe4f0;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 9.5px;
+      margin-bottom: 10px;
+    }
+    .amount-words strong { color: #1a3a6e; }
+
+    /* ── Section block ── */
+    .section-block { margin-bottom: 14px; }
+    .section-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #2c5aa0;
+      margin-bottom: 5px;
+    }
+
+    /* ── Notes ── */
+    .notes-block {
+      background: #fffbf0;
+      border-left: 3px solid #f39c12;
+      padding: 6px 10px;
+      font-size: 9px;
+      color: #555;
+      border-radius: 0 5px 5px 0;
+      margin-bottom: 12px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      position: absolute;
+      bottom: 10mm;
+      left: 14mm;
+      right: 14mm;
+      border-top: 2px solid #1a3a6e;
+      padding-top: 7px;
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .footer-col { font-size: 8px; color: #4a5568; line-height: 1.6; }
+    .footer-col strong { color: #1a3a6e; }
+    .footer-divider {
+      text-align: center;
+      font-size: 7.5px;
+      color: #8a9ab5;
+      margin-top: 4px;
+      border-top: 1px dashed #dbe4f0;
+      padding-top: 4px;
+    }
+
+    /* ── Print media ── */
+    @page { size: A4; margin: 0; }
+    @media print {
+      body { padding: 0; margin: 0; }
+      .page { width: 100%; padding: 12mm 14mm 30mm 14mm; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ═══ HEADER ═══ -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo-box"><span>RI</span></div>
+      <div>
+        <div class="company-name">STE. RACHIGLASS S.A.R.L. A.U</div>
+        <div class="company-sub">VENTE TOUS TYPE DE VERRE &nbsp;—&nbsp; Import / Export</div>
+        <div class="company-arabic">بيع وتركيب الزجاج — تصدير واستيراد</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="invoice-badge">FACTURE</div>
+      <div class="invoice-num">N° ${invoice.invoiceNumber}</div>
+      <div class="invoice-date">Date : ${formatDateTime(formData.issueDate)}</div>
+      <div class="invoice-date">TVA : ${formData.tvaRate}%</div>
+    </div>
+  </div>
+
+  <!-- ═══ INFO BAND ═══ -->
+  <div class="info-band">
+    <!-- Supplier -->
+    <div class="info-card">
+      <div class="info-card-title">Fournisseur</div>
+      <p><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
+      <p>Tél : +212 607-150550 / +212 658-527241 / +212 609-685211</p>
+      <p>Email : ibaghatrachid83@gmail.com</p>
+      <p>ICE : 003013206000054 &nbsp;|&nbsp; IF : 52433058</p>
+      <p>TP : 56780736 &nbsp;|&nbsp; RC : 24001 &nbsp;|&nbsp; CNSS : 2973747</p>
+    </div>
+    <!-- Client -->
+    <div class="info-card highlight">
+      <div class="info-card-title">Client</div>
+      <p><strong>${formData.customerName || "—"}</strong></p>
+      ${formData.customerPhone ? `<p>Tél : ${formData.customerPhone}</p>` : ""}
+      ${formData.ice ? `<p>ICE : ${formData.ice}</p>` : ""}
+      ${formData.ste ? `<p>Ste : ${formData.ste}</p>` : ""}
+    </div>
+    <!-- Invoice Meta -->
+    <div class="info-card">
+      <div class="info-card-title">Détails Facture</div>
+      <p><strong>Statut :</strong> ${formData.status}</p>
+      <p><strong>Paiement :</strong> ${formData.paymentType}</p>
+      ${formData.bonLivraisonId ? `<p><strong>BL N° :</strong> ${formData.bonLivraisonId}</p>` : ""}
+      ${formData.preparedBy ? `<p><strong>Préparé par :</strong> ${formData.preparedBy}</p>` : ""}
+      ${formData.validatedBy ? `<p><strong>Validé par :</strong> ${formData.validatedBy}</p>` : ""}
+    </div>
+  </div>
+
+  <!-- ═══ ITEMS TABLE ═══ -->
+  <div class="section-label">Articles</div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th class="th-center" style="width:60px">Qté</th>
+        <th class="th-center" style="width:55px">Long.</th>
+        <th class="th-center" style="width:55px">Larg.</th>
+        <th>Désignation</th>
+        <th class="th-right" style="width:70px">Prix U. (Dh)</th>
+        <th class="th-right" style="width:65px">Remise</th>
+        <th class="th-right" style="width:80px">Total HT (Dh)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsRows || `<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa;">Aucun article</td></tr>`}
+    </tbody>
+  </table>
+
+  <!-- ═══ TOTALS ═══ -->
+  <div class="totals-wrapper">
+    <div class="totals-box">
+      <div class="totals-row">
+        <span class="lbl">Sous-total HT</span>
+        <span class="val">${subTotal.toFixed(2)} Dh</span>
+      </div>
+      ${
+        discount > 0
+          ? `<div class="totals-row" style="color:#c0392b;">
+          <span class="lbl">Remise</span>
+          <span class="val">- ${discount.toFixed(2)} Dh</span>
+        </div>`
+          : ""
+      }
+      <div class="totals-row">
+        <span class="lbl">Total HT</span>
+        <span class="val">${totalHT.toFixed(2)} Dh</span>
+      </div>
+      <div class="totals-row">
+        <span class="lbl">TVA (${formData.tvaRate}%)</span>
+        <span class="val">+ ${tvaAmount.toFixed(2)} Dh</span>
+      </div>
+      <div class="totals-row highlight">
+        <span class="lbl">MT TTC</span>
+        <span class="val">${totalTTC.toFixed(2)} Dh</span>
+      </div>
+      ${
+        totalAdvancement > 0
+          ? `<div class="totals-row paid">
+          <span class="lbl">Acompte versé</span>
+          <span class="val">- ${totalAdvancement.toFixed(2)} Dh</span>
+        </div>`
+          : ""
+      }
+      <div class="totals-row remaining">
+        <span class="lbl">Reste à payer</span>
+        <span class="val">${remainingAmount.toFixed(2)} Dh</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ NOTES ═══ -->
+  ${
+    formData.notes
+      ? `<div class="notes-block"><strong>Notes :</strong> ${formData.notes}</div>`
+      : ""
+  }
+
+  <!-- ═══ ADVANCEMENTS ═══ -->
+  ${advancementsSection}
+
+  <!-- ═══ FOOTER ═══ -->
+  <div class="footer">
+    <div class="footer-inner">
+      <div class="footer-col">
+        <strong>Siège Social :</strong> Bni Boughamaren, Arimam Ihaddaden
+      </div>
+      <div class="footer-col" style="text-align:center;">
+        ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp; 📱 06.09.68.52.11<br/>
+        ✉ ibaghatrachid83@gmail.com
+      </div>
+      <div class="footer-col" style="text-align:right;">
+        <strong>Magasin :</strong> Hay Barraka Près de mosquée I Awaden
+      </div>
+    </div>
+    <div class="footer-divider">
+      TP : 56780736 &nbsp;—&nbsp; RC : 24001 &nbsp;—&nbsp; IF : 52433058 &nbsp;—&nbsp; CNSS : 2973747 &nbsp;—&nbsp; ICE : 003013206000054
+    </div>
+  </div>
+
+</div>
+${
+  /* Auto-print script injected only for the print window */
+  ""
+}
+</body>
+</html>
+`;
+};
 
 // Function to round to next multiple of 3
 const roundToNextMultipleOfThree = (value) => {
@@ -102,7 +618,6 @@ const statusOptions = [
   { value: "en_attente", label: "En Attente" },
 ];
 
-// Moroccan payment types
 const paymentTypeOptions = [
   { value: "espece", label: "Espèce" },
   { value: "cheque", label: "Chèque" },
@@ -112,7 +627,6 @@ const paymentTypeOptions = [
   { value: "non_paye", label: "Non Payé" },
 ];
 
-// Payment methods for advancements
 const paymentMethodOptions = [
   { value: "espece", label: "Espèce" },
   { value: "cheque", label: "Chèque" },
@@ -120,7 +634,6 @@ const paymentMethodOptions = [
   { value: "carte", label: "Carte Bancaire" },
 ];
 
-// TVA options
 const tvaOptions = [
   { value: 0, label: "0% (Exonéré)" },
   { value: 7, label: "7% (Taux réduit)" },
@@ -133,6 +646,9 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [loadingClients, setLoadingClients] = useState(true);
   const [formData, setFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -142,15 +658,10 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     discountType: "fixed",
     discountValue: 0,
     paymentType: "non_paye",
-
-    // TVA specific fields
     tvaRate: 20,
     includeTvaInPrice: true,
-
     items: [],
     advancements: [],
-
-    // Additional fields
     preparedBy: "",
     validatedBy: "",
     bonLivraisonId: null,
@@ -158,7 +669,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     ste: "",
   });
 
-  // Fetch products
   useEffect(() => {
     const fetchProducts = async () => {
       setLoadingProduits(true);
@@ -182,10 +692,47 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     fetchProducts();
   }, []);
 
-  // Load products for async select
+  // Fetch clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoadingClients(true);
+      try {
+        const response = await axios.get(`${config_url}/api/clients`);
+        const clientOptions = (response.data?.clients || []).map((client) => {
+          const refPart = client.reference ? `(${client.reference}) ` : "";
+          return {
+            value: client.id,
+            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+            searchText: [
+              client.nom_complete?.toLowerCase() || "",
+              client.telephone?.toLowerCase() || "",
+              client.reference?.toLowerCase() || "",
+            ].join(" "),
+            ...client,
+          };
+        });
+        setClients(clientOptions);
+      } catch (error) {
+        console.error("Error fetching clients:", error);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    fetchClients();
+  }, []);
+
+  // Handle client selection
+  const handleClientSelect = (clientId) => {
+    setSelectedClientId(clientId);
+    const selectedClient = clients.find((c) => c.value == clientId);
+    if (selectedClient) {
+      handleInputChange("customerName", selectedClient.nom_complete || "");
+      handleInputChange("customerPhone", selectedClient.telephone || "");
+    }
+  };
+
   const loadProduits = async (inputValue) => {
     if (!inputValue) return products;
-
     const filtered = products.filter((option) => {
       const searchTerm = inputValue.toLowerCase();
       const p = option.data;
@@ -194,7 +741,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         p.designation?.toLowerCase().includes(searchTerm)
       );
     });
-
     if (filtered.length === 0 && inputValue.length >= 2) {
       try {
         const res = await axios.get(
@@ -213,14 +759,11 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         return [];
       }
     }
-
     return filtered;
   };
 
-  // Handle product selection for an item
   const handleProductSelect = (selectedOption, index) => {
     const updatedItems = [...formData.items];
-
     if (!selectedOption) {
       updatedItems[index] = {
         ...updatedItems[index],
@@ -249,14 +792,9 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         }),
       };
     }
-
-    setFormData((prev) => ({
-      ...prev,
-      items: updatedItems,
-    }));
+    setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
 
-  // Add new item
   const handleAddItem = () => {
     const newItem = {
       id: `temp-${Date.now()}`,
@@ -270,20 +808,15 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       tva_ligne: null,
       produit_id: null,
     };
-    setFormData((prev) => ({
-      ...prev,
-      items: [...prev.items, newItem],
-    }));
+    setFormData((prev) => ({ ...prev, items: [...prev.items, newItem] }));
   };
 
-  // Delete an item
   const handleDeleteItem = async (index) => {
     const item = formData.items[index];
-
     if (item.id && !String(item.id).startsWith("temp-")) {
       const confirm = await MySwal.fire({
         title: "Supprimer cet article?",
-        text: "\u00cates-vous s\u00fbr de vouloir supprimer cet article de la facture?",
+        text: "Êtes-vous sûr de vouloir supprimer cet article de la facture?",
         icon: "warning",
         showCancelButton: true,
         confirmButtonColor: "#d33",
@@ -291,25 +824,14 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         confirmButtonText: "Oui, supprimer",
         cancelButtonText: "Annuler",
       });
-
       if (!confirm.isConfirmed) return;
     }
-
     const updatedItems = formData.items.filter((_, i) => i !== index);
-    setFormData((prev) => ({
-      ...prev,
-      items: updatedItems,
-    }));
+    setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
 
-  console.log("Items: " + JSON.stringify(formData));
-
-  // Initialize form data when invoice changes
   useEffect(() => {
     if (invoice) {
-      console.log("Initializing form with Facture:", invoice);
-
-      // Map lignes to items format expected by the UI
       const mappedItems = invoice.lignes
         ? invoice.lignes.map((ligne, index) => ({
             id: ligne.id || `temp-${index}`,
@@ -328,7 +850,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           }))
         : [];
 
-      // Map advancements from API
       const mappedAdvancements = invoice.advancements
         ? invoice.advancements.map((adv) => ({
             id: adv.id,
@@ -352,15 +873,10 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         discountType: invoice.discountType || "fixed",
         discountValue: parseFloat(invoice.discountValue) || 0,
         paymentType: invoice.paymentType || "non_paye",
-
-        // TVA fields
         tvaRate: parseFloat(invoice.tvaRate) || 20,
         includeTvaInPrice: invoice.includeTvaInPrice !== false,
-
         items: mappedItems,
         advancements: mappedAdvancements,
-
-        // Additional fields
         preparedBy: invoice.preparedBy || "",
         validatedBy: invoice.validatedBy || "",
         bonLivraisonId: invoice.bonLivraisonId || null,
@@ -406,14 +922,12 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     }
   };
 
-  // Calculate item total - simple qty × unitPrice
   const calculateItemTotal = (item) => {
     const baseTotal = item.quantity * item.unitPrice;
     const lineDiscount = item.remise_ligne || 0;
     return Math.max(0, baseTotal - lineDiscount);
   };
 
-  // Calculate all totals
   const subTotal = formData.items.reduce(
     (sum, item) => sum + calculateItemTotal(item),
     0,
@@ -422,34 +936,36 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   const calculateDiscount = () => {
     if (formData.discountType === "percentage") {
       return (subTotal * formData.discountValue) / 100;
-    } else {
-      return formData.discountValue;
     }
+    return formData.discountValue;
   };
 
   const discount = calculateDiscount();
   const totalHT = Math.max(0, subTotal - discount);
-
-  // TVA = Total HT × (TVA_rate / 100)
   const tvaRate = parseFloat(formData.tvaRate) || 20;
   const tvaAmount = totalHT * (tvaRate / 100);
-
-  // Total TTC = Total HT + TVA
   const totalTTC = totalHT + tvaAmount;
-
-  // Calculate total advancement from advancements array
   const totalAdvancement = formData.advancements.reduce(
     (sum, adv) => sum + parseFloat(adv.amount || 0),
     0,
   );
-
   const remainingAmount = Math.max(0, totalTTC - totalAdvancement);
 
+  // Shared template params
+  const templateParams = {
+    invoice,
+    formData,
+    subTotal,
+    discount,
+    totalHT,
+    tvaAmount,
+    totalTTC,
+    totalAdvancement,
+    remainingAmount,
+  };
+
   const handleInputChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleItemChange = (index, field, value) => {
@@ -458,22 +974,15 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       ...updatedItems[index],
       [field]: field === "articleName" ? value : parseFloat(value) || 0,
     };
-
-    // Recalculate total price when quantity or unitPrice changes
     if (["quantity", "unitPrice", "remise_ligne"].includes(field)) {
       updatedItems[index].totalPrice = calculateItemTotal(updatedItems[index]);
     }
-
-    setFormData((prev) => ({
-      ...prev,
-      items: updatedItems,
-    }));
+    setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
 
-  // Advancement handlers
   const addAdvancement = () => {
     const newAdvancement = {
-      id: Date.now(), // Temporary ID for new advancements
+      id: Date.now(),
       amount: 0,
       paymentDate: new Date(),
       paymentMethod: "espece",
@@ -505,10 +1014,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       const updatedAdvancements = formData.advancements.filter(
         (_, i) => i !== index,
       );
-      setFormData((prev) => ({
-        ...prev,
-        advancements: updatedAdvancements,
-      }));
+      setFormData((prev) => ({ ...prev, advancements: updatedAdvancements }));
     }
   };
 
@@ -525,28 +1031,18 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             ? value
             : parseFloat(value) || 0,
     };
-    setFormData((prev) => ({
-      ...prev,
-      advancements: updatedAdvancements,
-    }));
+    setFormData((prev) => ({ ...prev, advancements: updatedAdvancements }));
   };
 
   const handleSubmit = async () => {
-    console.log("Current form data before submit:", formData);
-
-    // Validate customer name
     if (!formData.customerName.trim()) {
       topTost("Le nom du client est requis", "error");
       return;
     }
-
-    // Validate items - at least one item required
     if (!formData.items || formData.items.length === 0) {
       topTost("La facture doit avoir au moins un article", "error");
       return;
     }
-
-    // Validate each item has required fields
     for (const item of formData.items) {
       if (!item.produit_id && !item.code) {
         topTost(
@@ -560,8 +1056,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         return;
       }
     }
-
-    // Validate advancements don't exceed total
     if (totalAdvancement > totalTTC) {
       topTost(
         "Le total des acomptes ne peut pas dépasser le montant total TTC",
@@ -569,8 +1063,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       );
       return;
     }
-
-    // Validate individual advancements
     for (const adv of formData.advancements) {
       if (!adv.amount || adv.amount <= 0) {
         topTost("Tous les acomptes doivent avoir un montant positif", "error");
@@ -583,9 +1075,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     }
 
     setIsSubmitting(true);
-
     try {
-      // Prepare the data for backend
       const updateData = {
         invoiceNumber: invoice.invoiceNumber,
         customerName: formData.customerName.trim(),
@@ -596,27 +1086,20 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         discountType: formData.discountType,
         discountValue: parseFloat(formData.discountValue) || 0,
         paymentType: formData.paymentType,
-
-        // TVA fields
         tvaRate: formData.tvaRate,
         tvaAmount: tvaAmount,
         includeTvaInPrice: formData.includeTvaInPrice,
-
-        // Financials
-        subTotal: subTotal,
+        subTotal,
         discountAmount: discount,
-        totalHT: totalHT,
-        totalTTC: totalTTC,
+        totalHT,
+        totalTTC,
         advancement: totalAdvancement,
-        remainingAmount: remainingAmount,
-
+        remainingAmount,
         preparedBy: formData.preparedBy || "",
         validatedBy: formData.validatedBy || "",
         bonLivraisonId: formData.bonLivraisonId,
         ice: formData.ice || "",
         ste: formData.ste || "",
-
-        // Map items back to lignes format for backend
         lignes: formData.items.map((item) => ({
           id: item.id?.toString().startsWith("temp-") ? undefined : item.id,
           produit_id: item.produit_id,
@@ -628,9 +1111,8 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           total_ligne: item.totalPrice,
           tva_ligne: item.tva_ligne,
         })),
-
         advancements: formData.advancements.map((adv) => ({
-          id: adv.id > 1000000000 ? undefined : adv.id, // Check if temp ID
+          id: adv.id > 1000000000 ? undefined : adv.id,
           amount: adv.amount,
           paymentDate: adv.paymentDate.toISOString(),
           paymentMethod: adv.paymentMethod,
@@ -639,462 +1121,97 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         })),
       };
 
-      console.log("Sending update data to backend:", updateData);
-
       const response = await axios.put(
         `${config_url}/api/factures/${invoice.id}`,
         updateData,
       );
-
-      console.log("Update response from backend:", response.data);
-
       topTost("Facture mise à jour avec succès!", "success");
-
-      if (onUpdate) {
-        onUpdate(response.data.facture || response.data);
-      }
-
+      if (onUpdate) onUpdate(response.data.facture || response.data);
       toggle();
     } catch (error) {
       console.error("Error updating invoice:", error);
-      console.error("Error response data:", error.response?.data);
-
       const errorMessage =
         error.response?.data?.message ||
         error.response?.data?.errors?.[0]?.message ||
-        "Erreur lors de la mise à jour de la facture. Veuillez réessayer.";
+        "Erreur lors de la mise à jour de la facture.";
       topTost(errorMessage, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ─── PRINT ────────────────────────────────────────────────────────────────
   const handlePrint = () => {
     if (!invoice) return;
-
-    const formatDate = (dateStr) => {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("fr-FR");
-    };
-
-    const formatDateTime = (dateStr) => {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      return d.toLocaleString("fr-FR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    };
-
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       alert("Veuillez autoriser les popups pour imprimer");
       return;
     }
-
-    const itemsHtml = formData.items
-      .map((item) => `
-        <tr>
-          <td>${item.produit?.reference || item.code || "-"}</td>
-          <td>${item.produit?.designation || item.designation || "-"}</td>
-          <td>${parseFloat(item.quantity).toFixed(2)}</td>
-          <td>${parseFloat(item.v1).toFixed(2)}</td>
-          <td>${parseFloat(item.v2).toFixed(2)}</td>
-          <td>${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
-          <td>${parseFloat(item.totalPrice).toFixed(2)} Dh</td>
-        </tr>
-      `)
-      .join("");
-
-    const advancementsHtml = formData.advancements && formData.advancements.length > 0
-      ? `
-        <div class="advancements">
-          <h3>Historique des Avancements</h3>
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Date Paiement</th>
-                <th>Montant</th>
-                <th>Méthode</th>
-                <th>Référence</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${formData.advancements
-                .map((a) => `
-                  <tr>
-                    <td>${formatDate(a.paymentDate)}</td>
-                    <td>${parseFloat(a.amount).toFixed(2)} Dh</td>
-                    <td>${a.paymentMethod}</td>
-                    <td>${a.reference || "-"}</td>
-                    <td>${a.notes || "-"}</td>
-                  </tr>
-                `)
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      `
-      : "";
-
-    const printContent = `<!DOCTYPE html>
-<html>
-<head>
-  <title>Facture ${invoice.invoiceNumber}</title>
-  <meta charset="UTF-8">
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 10px;
-      margin: 0;
-      padding: 10mm;
-      color: #333;
-    }
-    .header {
-      text-align: center;
-      border-bottom: 2px solid #333;
-      padding-bottom: 10px;
-      margin-bottom: 15px;
-    }
-    .company-info, .invoice-info {
-      display: flex;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
-    }
-    .info-block { flex: 1; min-width: 220px; }
-    .info-block p { margin: 3px 0; }
-    .table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 15px 0;
-    }
-    .table th, .table td {
-      border: 1px solid #ddd;
-      padding: 6px;
-      text-align: left;
-    }
-    .table th { background-color: #f5f5f5; }
-    .totals {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      margin-top: 20px;
-    }
-    .totals p { margin: 2px 0; }
-    .notes { margin-top: 20px; }
-    .footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      border-top: 1px solid #333;
-      padding: 8px 10px;
-      text-align: center;
-      font-size: 9px;
-      color: #444;
-      background: white;
-    }
-    @page { margin: 0; size: A4; }
-    @media print { body { margin: 10mm; } }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h2 style="margin: 0;">FACTURE</h2>
-    <h3 style="margin: 5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
-    <p>VENTE TOUS TYPE DE VERRE — Import / Export</p>
-    <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
-  </div>
-
-  <div class="company-info">
-    <div class="info-block">
-      <p><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
-      <p>VENTE TOUS TYPE DE VERRE — Import / Export</p>
-      <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
-      <p>Email: ibaghatrachid83@gmail.com</p>
-      <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</p>
-      <p>ICE: 003013206000054</p>
-    </div>
-    <div class="info-block" style="text-align:right;">
-      <p><strong>Facture N°:</strong> ${invoice.invoiceNumber}</p>
-      <p><strong>Date création:</strong> ${formatDateTime(formData.issueDate)}</p>
-      <p><strong>TVA:</strong> ${formData.tvaRate}%</p>
-    </div>
-  </div>
-
-  <div class="invoice-info">
-    <div class="info-block">
-      <p><strong>Client:</strong> ${formData.customerName}</p>
-      <p><strong>Tél:</strong> ${formData.customerPhone || "-"}</p>
-    </div>
-  </div>
-
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Code</th>
-        <th>Désignation</th>
-        <th>Qté</th>
-        <th>Long.</th>
-        <th>Larg.</th>
-        <th>Prix U.</th>
-        <th>Total HT</th>
-      </tr>
-    </thead>
-    <tbody>${itemsHtml}</tbody>
-  </table>
-
-  <div class="totals">
-    <p><strong>Sous-total HT:</strong> ${subTotal.toFixed(2)} Dh</p>
-    ${discount > 0 ? `<p><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
-    <p><strong>Total HT:</strong> ${totalHT.toFixed(2)} Dh</p>
-    <p><strong>TVA (${formData.tvaRate}%):</strong> +${tvaAmount.toFixed(2)} Dh</p>
-    <p style="font-weight:bold; font-size:12px;"><strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh</p>
-    ${totalAdvancement > 0 ? `<p><strong>Avancement:</strong> -${totalAdvancement.toFixed(2)} Dh</p>` : ""}
-    <p style="font-weight:bold; border-top:1px solid #333; padding-top:5px;">
-      Reste à payer: ${remainingAmount.toFixed(2)} Dh
-    </p>
-  </div>
-
-  ${advancementsHtml}
-
-
-  <div class="footer">
-    <p>
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p>
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-  </div>
-
-  <script>
-    window.onload = function() {
-      window.print();
-    };
-  </script>
-</body>
-</html>`;
-
+    let html = buildInvoiceHTML(templateParams);
+    // Inject auto-print script before </body>
+    html = html.replace(
+      "</body>",
+      `<script>window.onload = function(){ window.print(); };<\/script></body>`,
+    );
     printWindow.document.open();
-    printWindow.document.write(printContent);
+    printWindow.document.write(html);
     printWindow.document.close();
   };
 
+  // ─── PDF DOWNLOAD ─────────────────────────────────────────────────────────
   const generateAndDownloadPDF = async () => {
     try {
-      const pdfContainer = document.createElement("div");
-      pdfContainer.id = "pdf-container";
-      pdfContainer.style.width = "210mm";
-      pdfContainer.style.minHeight = "297mm";
-      pdfContainer.style.padding = "15mm 20mm";
-      pdfContainer.style.background = "white";
-      pdfContainer.style.color = "#000";
-      pdfContainer.style.fontFamily = "Arial, sans-serif";
-      pdfContainer.style.fontSize = "11px";
-      pdfContainer.style.lineHeight = "1.5";
-      pdfContainer.style.position = "absolute";
-      pdfContainer.style.left = "-9999px";
-      pdfContainer.style.top = "0";
+      const html = buildInvoiceHTML(templateParams);
 
-      const formatDate = (date) => {
-        if (!date) return "";
-        return new Date(date).toLocaleDateString("fr-FR");
-      };
+      // Create hidden iframe to render the HTML
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.left = "-9999px";
+      iframe.style.top = "0";
+      iframe.style.width = "794px"; // ~210mm at 96dpi
+      iframe.style.height = "1123px"; // ~297mm at 96dpi
+      iframe.style.border = "none";
+      document.body.appendChild(iframe);
 
-      const formatDateTime = (dateStr) => {
-        if (!dateStr) return "";
-        const d = new Date(dateStr);
-        return d.toLocaleString("fr-FR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      };
-
-      pdfContainer.innerHTML = `
-      <div style="text-align:center; border-bottom:2px solid #333; padding-bottom:10px; margin-bottom:15px;">
-        <h1 style="margin:0; color:#2c5aa0;">FACTURE</h1>
-
-      </div>
-
-      <div style="display:flex; justify-content:space-between; margin-bottom:20px;">
-        <div>
-          <p style="margin:2px 0;"><strong>Sté RachiGlass S.A.R.L A.U</strong></p>
-          <p style="margin:2px 0;">VENTE TOUS TYPE DE VERRE — Import / Export</p>
-          <p style="margin:2px 0;">Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
-          <p style="margin:2px 0;">Email: ibaghatrachid83@gmail.com</p>
-          <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</p>
-          <p style="margin:2px 0;">ICE: 003013206000054</p>
-        </div>
-        <div style="text-align:right;">
-          <h4 style="margin-bottom:5px;">Facture</h4>
-          <p style="margin:2px 0;"><strong>N°:</strong> ${invoice.invoiceNumber}</p>
-          <p style="margin:2px 0;"><strong>Date:</strong> ${formatDateTime(formData.issueDate)}</p>
-          <p style="margin:2px 0;"><strong>TVA:</strong> ${formData.tvaRate}%</p>
-        </div>
-      </div>
-
-      <div style="margin-bottom:15px;">
-        <h4 style="margin-bottom:5px;">Client</h4>
-        <p style="margin:2px 0;"><strong>Nom:</strong> ${formData.customerName}</p>
-        <p style="margin:2px 0;"><strong>Tél:</strong> ${formData.customerPhone || "-"}</p>
-      </div>
-
-      <table style="width:100%; border-collapse:collapse; font-size:10px; margin-bottom:15px;">
-        <thead>
-          <tr style="background-color:#2c5aa0; color:#fff;">
-            <th style="padding:6px; border:1px solid #2c5aa0;">Code</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Désignation</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Qté</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">L</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">l</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">P.U</th>
-            <th style="padding:6px; border:1px solid #2c5aa0;">Total HT</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${formData.items
-            .map(
-              (item, i) => `
-              <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
-                <td style="border:1px solid #ddd; padding:5px;">${item.produit?.reference || item.code || "-"}</td>
-                <td style="border:1px solid #ddd; padding:5px;">${item.produit?.designation || item.designation || "-"}</td>
-                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.quantity}</td>
-                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.v1}</td>
-                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.v2}</td>
-                <td style="border:1px solid #ddd; text-align:right; padding:5px;">${item.unitPrice.toFixed(2)} Dh</td>
-                <td style="border:1px solid #ddd; text-align:right; padding:5px;">${item.totalPrice.toFixed(2)} Dh</td>
-              </tr>`,
-            )
-            .join("")}
-        </tbody>
-      </table>
-
-      <div style="text-align:right; margin-top:20px;">
-        <p style="margin:2px 0;"><strong>Sous-total HT:</strong> ${subTotal.toFixed(2)} Dh</p>
-        ${discount > 0 ? `<p style="margin:2px 0;"><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
-        <p style="margin:2px 0;"><strong>Total HT:</strong> ${totalHT.toFixed(2)} Dh</p>
-        <p style="margin:2px 0;"><strong>TVA (${formData.tvaRate}%):</strong> +${tvaAmount.toFixed(2)} Dh</p>
-        <p style="font-size:13px; font-weight:bold; color:#2c5aa0; margin:2px 0;">
-          <strong>Total TTC:</strong> ${totalTTC.toFixed(2)} Dh
-        </p>
-        ${
-          totalAdvancement > 0
-            ? `<p style="margin:2px 0;"><strong>Avancement:</strong> -${totalAdvancement.toFixed(2)} Dh</p>
-               <p style="font-size:12px; font-weight:bold; border-top:2px solid #2c5aa0; padding-top:5px;">
-                 Reste à payer: ${remainingAmount.toFixed(2)} Dh
-               </p>`
-            : `<p style="font-size:12px; font-weight:bold; border-top:2px solid #2c5aa0; padding-top:5px;">
-                 Reste à payer: ${remainingAmount.toFixed(2)} Dh
-               </p>`
-        }
-      </div>
-
-      ${
-        formData.advancements && formData.advancements.length > 0
-          ? `
-        <div style="margin-top:25px;">
-          <h4 style="margin-bottom:10px; border-bottom:1px solid #ccc; padding-bottom:5px;">Historique des Avancements</h4>
-          <table style="width:100%; border-collapse:collapse; font-size:9px; margin-top:10px;">
-            <thead>
-              <tr style="background-color:#f5f5f5;">
-                <th style="border:1px solid #ddd; padding:4px; text-align:left;">Date Paiement</th>
-                <th style="border:1px solid #ddd; padding:4px; text-align:right;">Montant</th>
-                <th style="border:1px solid #ddd; padding:4px; text-align:left;">Méthode</th>
-                <th style="border:1px solid #ddd; padding:4px; text-align:left;">Référence</th>
-                <th style="border:1px solid #ddd; padding:4px; text-align:left;">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${formData.advancements
-                .map(
-                  (a) => `
-                <tr>
-                  <td style="border:1px solid #ddd; padding:4px;">${formatDate(a.paymentDate)}</td>
-                  <td style="border:1px solid #ddd; padding:4px; text-align:right;">${parseFloat(a.amount).toFixed(2)} Dh</td>
-                  <td style="border:1px solid #ddd; padding:4px;">${a.paymentMethod}</td>
-                  <td style="border:1px solid #ddd; padding:4px;">${a.reference || "-"}</td>
-                  <td style="border:1px solid #ddd; padding:4px;">${a.notes || "-"}</td>
-                </tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      `
-          : ""
-      }
-
-
-   <div style="
-  position: absolute;
-  bottom: 15mm;
-  left: 20mm;
-  right: 20mm;
-  border-top: 2px solid #333;
-  padding-top: 10px;
-  text-align: center;
-  font-size: 9px;
-  color: #444;
-">
-  <p style="margin:3px 0;">
-    <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-    <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-  </p>
-        <p style="margin:3px 0;">
-          ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-          📱 06.09.68.52.11 &nbsp;|&nbsp;
-          Email: ibaghatrachid83@gmail.com
-        </p>
-        <p style="margin:3px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-    
-      </div>
-    `;
-
-      document.body.appendChild(pdfContainer);
-
-      const canvas = await html2canvas(pdfContainer, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#fff",
+      await new Promise((resolve) => {
+        iframe.onload = resolve;
+        iframe.srcdoc = html;
       });
 
-      document.body.removeChild(pdfContainer);
+      // Small delay for fonts/layout
+      await new Promise((r) => setTimeout(r, 400));
+
+      const canvas = await html2canvas(iframe.contentDocument.body, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        width: 794,
+        height: 1123,
+        windowWidth: 794,
+        windowHeight: 1123,
+      });
+
+      document.body.removeChild(iframe);
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
+      const pageWidth = pdf.internal.pageSize.getWidth(); // 210
+      const pageHeight = pdf.internal.pageSize.getHeight(); // 297
 
-      if (imgHeight <= pageHeight) {
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeight);
+      const imgHeightMm = (canvas.height * pageWidth) / canvas.width;
+
+      if (imgHeightMm <= pageHeight) {
+        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeightMm);
       } else {
-        let heightLeft = imgHeight;
+        let heightLeft = imgHeightMm;
         let position = 0;
-
-        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeightMm);
         heightLeft -= pageHeight;
-
         while (heightLeft > 1) {
-          position = heightLeft - imgHeight;
+          position = heightLeft - imgHeightMm;
           pdf.addPage();
-          pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
+          pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeightMm);
           heightLeft -= pageHeight;
         }
       }
@@ -1108,7 +1225,12 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   };
 
   return (
-    <Modal isOpen={isOpen} toggle={toggle} size="xl" style={{ maxWidth: "90vw" }}>
+    <Modal
+      isOpen={isOpen}
+      toggle={toggle}
+      size="xl"
+      style={{ maxWidth: "90vw" }}
+    >
       <ModalHeader toggle={toggle}>
         Facture #{invoice.invoiceNumber}
         <Badge color={getStatusBadge(formData.status)} className="ms-2">
@@ -1122,7 +1244,33 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
 
       <ModalBody>
         <div className="row">
-          {/* Customer Information */}
+          {/* Client Selection */}
+          <div className="col-md-12">
+            <div className="form-group mb-3">
+              <label className="form-label">Sélectionner un Client</label>
+              <Select
+                options={clients}
+                value={
+                  selectedClientId
+                    ? clients.find((c) => c.value == selectedClientId)
+                    : null
+                }
+                onChange={(option) => handleClientSelect(option?.value || "")}
+                placeholder="Choisissez un client..."
+                isClearable
+                isSearchable
+                isLoading={loadingClients}
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    backgroundColor: "#fff",
+                    borderColor: "#ddd",
+                  }),
+                }}
+              />
+            </div>
+          </div>
+
           <div className="col-md-6">
             <div className="form-group mb-3">
               <label className="form-label">Nom Client *</label>
@@ -1152,7 +1300,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             </div>
           </div>
 
-          {/* Invoice Details */}
           <div className="col-md-4">
             <div className="form-group mb-3">
               <label className="form-label">Date et Heure</label>
@@ -1203,7 +1350,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             </div>
           </div>
 
-          {/* TVA Settings */}
           <div className="col-md-6">
             <div className="form-group mb-3">
               <label className="form-label">Taux de TVA</label>
@@ -1260,7 +1406,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             </div>
           </div>
 
-          {/* Discount Section */}
           <div className="col-md-6">
             <div className="form-group mb-3">
               <label className="form-label">Type de Remise</label>
@@ -1300,7 +1445,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             </div>
           </div>
 
-          {/* Advancements Section */}
+          {/* Advancements */}
           <div className="col-12">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h6>Avances</h6>
@@ -1309,7 +1454,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                 Ajouter Avance
               </Button>
             </div>
-
             {formData.advancements.length > 0 ? (
               <div className="table-responsive">
                 <table className="table table-bordered">
@@ -1387,7 +1531,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                                 e.target.value,
                               )
                             }
-                            placeholder="N° chèque, référence..."
+                            placeholder="N° chèque..."
                           />
                         </td>
                         <td>
@@ -1427,7 +1571,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             )}
           </div>
 
-          {/* Notes */}
           <div className="col-12">
             <div className="form-group mb-3">
               <label className="form-label">Notes</label>
@@ -1441,7 +1584,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             </div>
           </div>
 
-          {/* Company Info - ICE & STE */}
           <div className="col-md-6">
             <div className="form-group mb-3">
               <label className="form-label">ICE</label>
@@ -1495,14 +1637,11 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                 <tbody>
                   {formData.items.map((item, index) => (
                     <tr key={item.id || index}>
-                      {/* Code - Static display */}
                       <td className="align-middle">
                         <span className="fw-bold text-primary">
                           {item.produit?.reference || item.code || "-"}
                         </span>
                       </td>
-
-                      {/* Designation - Product Select */}
                       <td>
                         {loadingProduits ? (
                           <div className="text-center py-2 text-muted">
@@ -1546,10 +1685,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                                   minHeight: "38px",
                                   zIndex: 1,
                                 }),
-                                menu: (base) => ({
-                                  ...base,
-                                  zIndex: 1050,
-                                }),
+                                menu: (base) => ({ ...base, zIndex: 1050 }),
                               }}
                             />
                             {item.produit && (
@@ -1561,8 +1697,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                           </>
                         )}
                       </td>
-
-                      {/* Qty - Input */}
                       <td>
                         <input
                           type="number"
@@ -1575,8 +1709,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                           step="0.01"
                         />
                       </td>
-
-                      {/* Prix/Unité - Input */}
                       <td>
                         <input
                           type="number"
@@ -1589,15 +1721,11 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                           step="0.01"
                         />
                       </td>
-
-                      {/* Total HT - Static display (calculated) */}
                       <td className="align-middle text-end">
                         <span className="fw-bold text-success">
                           {item.totalPrice?.toFixed(2) || "0.00"} Dh
                         </span>
                       </td>
-
-                      {/* Delete button */}
                       <td className="align-middle text-center">
                         <button
                           type="button"
@@ -1615,7 +1743,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             </div>
           </div>
 
-          {/* Summary Section with TVA */}
+          {/* Summary */}
           <div className="col-12">
             <div className="bg-light p-3 rounded mt-3">
               <div className="row">
@@ -1664,8 +1792,10 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                     <span>{totalHT.toFixed(2)} Dh</span>
                   </div>
                   <div className="d-flex justify-content-between">
-                    <span>TVA (20%):</span>
-                    <span className="text-info">20%</span>
+                    <span>TVA ({formData.tvaRate}%):</span>
+                    <span className="text-info">
+                      +{tvaAmount.toFixed(2)} Dh
+                    </span>
                   </div>
                   <div className="d-flex justify-content-between fw-bold">
                     <span>Total TTC:</span>

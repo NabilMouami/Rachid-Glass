@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import AsyncSelect from "react-select/async";
+import Select from "react-select";
 import { components } from "react-select";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -44,14 +45,42 @@ const roundToNextMultipleOfThree = (value) => {
 };
 
 const calculateItemTotal = (item) => {
-  const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
-  return (
-    (parseFloat(item.quantity) || 0) *
-    calcV1 *
-    calcV2 *
-    (parseFloat(item.unitPrice) || 0)
-  );
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  const qty = parseFloat(item.quantity) || 0;
+  const price = parseFloat(item.unitPrice) || 0;
+
+  // If both v1 and v2 are 1, calculate as simple: qty * price
+  if (v1 === 1 && v2 === 1) {
+    return qty * price;
+  }
+
+  // Otherwise use the roundToNextMultipleOfThree formula
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  return qty * calcV1 * calcV2 * price;
+};
+
+const calculateMetreLin = (item) => {
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  // Return 0 for simple calculations (v1=1 and v2=1)
+  if (v1 === 1 && v2 === 1) return 0;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const qty = parseFloat(item.quantity) || 0;
+  return (calcV1 + calcV2) * 2 * qty;
+};
+
+const calculateSurface = (item) => {
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  // Return 0 for simple calculations (v1=1 and v2=1)
+  if (v1 === 1 && v2 === 1) return 0;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const qty = parseFloat(item.quantity) || 0;
+  return qty * calcV1 * calcV2;
 };
 
 // Custom ClearIndicator for react-select
@@ -126,6 +155,14 @@ const paymentTypeOptions = [
   { value: "carte", label: "Carte Bancaire" },
   { value: "multiple", label: "Paiement Multiple" },
   { value: "non_paye", label: "Non Payé" },
+];
+
+// Payment methods for advancements
+const paymentMethodOptions = [
+  { value: "espece", label: "Espèce" },
+  { value: "cheque", label: "Chèque" },
+  { value: "virement", label: "Virement Bancaire" },
+  { value: "carte", label: "Carte Bancaire" },
 ];
 
 // Your totalToFrenchText function
@@ -251,6 +288,8 @@ const BonLivraisonDetailsPage = () => {
   const [bon, setBon] = useState(null);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     customerName: "",
@@ -293,6 +332,32 @@ const BonLivraisonDetailsPage = () => {
       }
     };
     fetchProducts();
+  }, []);
+
+  // Fetch clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const response = await axios.get(`${config_url}/api/clients`);
+        const clientOptions = (response.data?.clients || []).map((client) => {
+          const refPart = client.reference ? `(${client.reference}) ` : "";
+          return {
+            value: client.id,
+            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+            searchText: [
+              client.nom_complete?.toLowerCase() || "",
+              client.telephone?.toLowerCase() || "",
+              client.reference?.toLowerCase() || "",
+            ].join(" "),
+            ...client,
+          };
+        });
+        setClients(clientOptions);
+      } catch (error) {
+        console.error("Error fetching clients:", error);
+      }
+    };
+    fetchClients();
   }, []);
 
   // Load products for async select
@@ -413,6 +478,8 @@ const BonLivraisonDetailsPage = () => {
         items: mappedItems,
         advancements: mappedAdvancements,
       });
+
+      setSelectedClientId(data.client_id || "");
     } catch (err) {
       console.error(err);
       topTost("Erreur chargement bon de livraison", "error");
@@ -445,6 +512,16 @@ const BonLivraisonDetailsPage = () => {
   // Calculations
   const subTotal = formData.items.reduce(
     (sum, item) => sum + calculateItemTotal(item),
+    0,
+  );
+
+  const totalMetreLin = formData.items.reduce(
+    (sum, item) => sum + calculateMetreLin(item),
+    0,
+  );
+
+  const totalSurface = formData.items.reduce(
+    (sum, item) => sum + calculateSurface(item),
     0,
   );
 
@@ -525,6 +602,19 @@ const BonLivraisonDetailsPage = () => {
     updatedItems[index].totalPrice = calculateItemTotal(item);
 
     setFormData((prev) => ({ ...prev, items: updatedItems }));
+  };
+
+  const handleClientSelect = (clientId) => {
+    setSelectedClientId(clientId);
+
+    const selectedClient = clients.find((c) => c.value == clientId);
+    if (selectedClient) {
+      setFormData((prev) => ({
+        ...prev,
+        customerName: selectedClient.nom_complete || "",
+        customerPhone: selectedClient.telephone || "",
+      }));
+    }
   };
 
   const addItem = () => {
@@ -621,6 +711,7 @@ const BonLivraisonDetailsPage = () => {
       const updateData = {
         customerName: formData.customerName.trim(),
         customerPhone: formData.customerPhone.trim(),
+        clientId: selectedClientId || null,
         issueDate: formData.issueDate.toISOString(),
         status: formData.status,
         paymentType: formData.paymentType,
@@ -637,6 +728,14 @@ const BonLivraisonDetailsPage = () => {
           prix_unitaire: item.unitPrice?.toString() || "0",
           total_ligne: item.totalPrice?.toString() || "0",
           designation: item.designation || null,
+        })),
+        advancements: formData.advancements.map((adv) => ({
+          id: adv.id?.toString().startsWith("temp-") ? undefined : adv.id,
+          amount: parseFloat(adv.amount) || 0,
+          paymentDate: new Date(adv.paymentDate).toISOString(),
+          paymentMethod: adv.paymentMethod,
+          reference: adv.reference || null,
+          notes: adv.notes || null,
         })),
       };
 
@@ -825,20 +924,33 @@ const BonLivraisonDetailsPage = () => {
     </thead>
     <tbody>
       ${formData.items
-        .map(
-          (item) => `
+        .map((item) => {
+          const v1 = parseFloat(item.v1) || 1;
+          const v2 = parseFloat(item.v2) || 1;
+          const isSimpleCalc = v1 === 1 && v2 === 1;
+          const qty = parseFloat(item.quantity) || 0;
+          const price = parseFloat(item.unitPrice) || 0;
+
+          // Calculate total: qty * price for simple, else qty * (v1/100rounded) * (v2/100rounded) * price
+          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+          const total = isSimpleCalc
+            ? qty * price
+            : qty * calcV1 * calcV2 * price;
+
+          return `
         <tr>
           <td>${item.code || "—"}</td>
           <td>${item.designation || "—"}</td>
           <td class="text-center">${item.quantity}</td>
-          <td class="text-center">${item.v1}</td>
-          <td class="text-center">${item.v2}</td>
-          <td class="text-center">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td class="text-center">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td class="text-end">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
+          <td class="text-center">${v1 === 1 ? "-" : item.v1}</td>
+          <td class="text-center">${v2 === 1 ? "-" : item.v2}</td>
+          <td class="text-center">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+          <td class="text-center">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
+          <td class="text-end">${formatAmount(total)}</td>
         </tr>
-      `,
-        )
+      `;
+        })
         .join("")}
     </tbody>
   </table>
@@ -1030,21 +1142,34 @@ const BonLivraisonDetailsPage = () => {
     </thead>
     <tbody>
       ${formData.items
-        .map(
-          (item) => `
+        .map((item) => {
+          const v1 = parseFloat(item.v1) || 1;
+          const v2 = parseFloat(item.v2) || 1;
+          const isSimpleCalc = v1 === 1 && v2 === 1;
+          const qty = parseFloat(item.quantity) || 0;
+          const price = parseFloat(item.unitPrice) || 0;
+
+          // Calculate total: qty * price for simple, else qty * (v1/100rounded) * (v2/100rounded) * price
+          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+          const total = isSimpleCalc
+            ? qty * price
+            : qty * calcV1 * calcV2 * price;
+
+          return `
         <tr>
           <td>${item.code || "—"}</td>
           <td>${item.designation || "—"}</td>
           <td class="text-center">${item.quantity}</td>
-          <td class="text-center">${item.v1}</td>
-          <td class="text-center">${item.v2}</td>
-          <td class="text-center">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td class="text-center">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td class="text-end">${formatAmount(item.unitPrice)}</td>
-          <td class="text-end">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
+          <td class="text-center">${v1 === 1 ? "-" : item.v1}</td>
+          <td class="text-center">${v2 === 1 ? "-" : item.v2}</td>
+          <td class="text-center">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+          <td class="text-center">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
+          <td class="text-end">${formatAmount(price)}</td>
+          <td class="text-end">${formatAmount(total)}</td>
         </tr>
-      `,
-        )
+      `;
+        })
         .join("")}
     </tbody>
   </table>
@@ -1143,20 +1268,33 @@ const BonLivraisonDetailsPage = () => {
         </thead>
         <tbody>
           ${formData.items
-            .map(
-              (item) => `
+            .map((item) => {
+              const v1 = parseFloat(item.v1) || 1;
+              const v2 = parseFloat(item.v2) || 1;
+              const isSimpleCalc = v1 === 1 && v2 === 1;
+              const qty = parseFloat(item.quantity) || 0;
+              const price = parseFloat(item.unitPrice) || 0;
+
+              // Calculate total: qty * price for simple, else qty * (v1/100rounded) * (v2/100rounded) * price
+              const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+              const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+              const total = isSimpleCalc
+                ? qty * price
+                : qty * calcV1 * calcV2 * price;
+
+              return `
             <tr>
               <td style="border:1.5px solid #000; padding:6px;">${item.code || "—"}</td>
               <td style="border:1.5px solid #000; padding:6px;">${item.designation || "—"}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.quantity}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v1}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v2}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${v1 === 1 ? "-" : item.v1}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${v2 === 1 ? "-" : item.v2}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(total)}</td>
             </tr>
-          `,
-            )
+          `;
+            })
             .join("")}
         </tbody>
       </table>
@@ -1277,21 +1415,34 @@ const BonLivraisonDetailsPage = () => {
         </thead>
         <tbody>
           ${formData.items
-            .map(
-              (item) => `
+            .map((item) => {
+              const v1 = parseFloat(item.v1) || 1;
+              const v2 = parseFloat(item.v2) || 1;
+              const isSimpleCalc = v1 === 1 && v2 === 1;
+              const qty = parseFloat(item.quantity) || 0;
+              const price = parseFloat(item.unitPrice) || 0;
+
+              // Calculate total: qty * price for simple, else qty * (v1/100rounded) * (v2/100rounded) * price
+              const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+              const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+              const total = isSimpleCalc
+                ? qty * price
+                : qty * calcV1 * calcV2 * price;
+
+              return `
             <tr>
               <td style="border:1.5px solid #000; padding:6px;">${item.code || "—"}</td>
               <td style="border:1.5px solid #000; padding:6px;">${item.designation || "—"}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.quantity}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v1}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v2}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.unitPrice)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount((item.quantity || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (item.unitPrice || 0))}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${v1 === 1 ? "-" : item.v1}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${v2 === 1 ? "-" : item.v2}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(price)}</td>
+              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(total)}</td>
             </tr>
-          `,
-            )
+          `;
+            })
             .join("")}
         </tbody>
       </table>
@@ -1389,17 +1540,30 @@ const BonLivraisonDetailsPage = () => {
             </h5>
             <div className="mt-2">
               <div className="form-group mb-3">
-                <label className="form-label">Nom Client *</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.customerName}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      customerName: e.target.value,
-                    }))
-                  }
+                <label className="form-label">Sélectionner un Client</label>
+                <Select
+                  options={clients}
+                  className="react-select"
+                  classNamePrefix="react-select"
+                  placeholder="Sélectionner un client"
+                  value={clients.find((c) => c.value === selectedClientId)}
+                  onChange={(e) => handleClientSelect(e.value)}
+                  isClearable
+                  isSearchable
+                  noOptionsMessage={() => "Aucun client trouvé"}
+                  filterOption={(option, rawInput) => {
+                    if (!rawInput) return true;
+                    const search = rawInput.toLowerCase().trim();
+                    return option.data.searchText.includes(search);
+                  }}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      minHeight: "45px",
+                      borderColor: "#dee2e6",
+                      "&:hover": { borderColor: "#405189" },
+                    }),
+                  }}
                 />
               </div>
               <div className="form-group mb-3">
@@ -1412,6 +1576,20 @@ const BonLivraisonDetailsPage = () => {
                     setFormData((prev) => ({
                       ...prev,
                       customerPhone: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div className="form-group mb-3">
+                <label className="form-label">Nom Client *</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={formData.customerName}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      customerName: e.target.value,
                     }))
                   }
                 />
@@ -1595,52 +1773,78 @@ const BonLivraisonDetailsPage = () => {
                     </td>
 
                     {/* Longueur (v1) */}
-                    <td>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        value={item.v1}
-                        onChange={(e) =>
-                          handleItemChange(index, "v1", e.target.value)
-                        }
-                        min="1"
-                      />
+                    <td className="align-middle text-center">
+                      {parseFloat(item.v1) === 1 ? (
+                        <span className="text-primary fw-bold">-</span>
+                      ) : (
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={item.v1}
+                          onChange={(e) =>
+                            handleItemChange(index, "v1", e.target.value)
+                          }
+                          min="1"
+                        />
+                      )}
                     </td>
 
                     {/* Largeur (v2) */}
-                    <td>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        value={item.v2}
-                        onChange={(e) =>
-                          handleItemChange(index, "v2", e.target.value)
-                        }
-                        min="0.01"
-                        step="0.01"
-                      />
+                    <td className="align-middle text-center">
+                      {parseFloat(item.v2) === 1 ? (
+                        <span className="text-primary fw-bold">-</span>
+                      ) : (
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={item.v2}
+                          onChange={(e) =>
+                            handleItemChange(index, "v2", e.target.value)
+                          }
+                          min="0.01"
+                          step="0.01"
+                        />
+                      )}
                     </td>
 
-                    {/* Metre Lineaire - qty * v1 * v2 / 10000 */}
+                    {/* Metre Lineaire: Show '-' if simple calculation (v1=1 and v2=1), else calculate */}
                     <td className="align-middle text-center">
                       <span className="text-primary fw-bold">
-                        {(
-                          ((parseFloat(item.quantity) || 0) *
-                            (parseFloat(item.v1) || 0) *
-                            (parseFloat(item.v2) || 0)) /
-                          10000
-                        ).toFixed(4)}
+                        {(parseFloat(item.v1) || 1) === 1 &&
+                        (parseFloat(item.v2) || 1) === 1
+                          ? "-"
+                          : (
+                              (roundToNextMultipleOfThree(
+                                parseFloat(item.v1) || 0,
+                              ) /
+                                100 +
+                                roundToNextMultipleOfThree(
+                                  parseFloat(item.v2) || 0,
+                                ) /
+                                  100) *
+                              2 *
+                              (parseFloat(item.quantity) || 0)
+                            ).toFixed(2)}
                       </span>
                     </td>
 
-                    {/* Surface - v1 * v2 / 10000 */}
+                    {/* Surface: Show '-' if simple calculation (v1=1 and v2=1), else calculate */}
                     <td className="align-middle text-center">
                       <span className="text-info fw-bold">
-                        {(
-                          ((parseFloat(item.v1) || 0) *
-                            (parseFloat(item.v2) || 0)) /
-                          10000
-                        ).toFixed(4)}
+                        {(parseFloat(item.v1) || 1) === 1 &&
+                        (parseFloat(item.v2) || 1) === 1
+                          ? "-"
+                          : (
+                              (parseFloat(item.quantity) || 0) *
+                              (roundToNextMultipleOfThree(
+                                parseFloat(item.v1) || 0,
+                              ) /
+                                100) *
+                              (roundToNextMultipleOfThree(
+                                parseFloat(item.v2) || 0,
+                              ) /
+                                100)
+                            ).toFixed(4)}
                       </span>
                     </td>
 
@@ -1682,6 +1886,129 @@ const BonLivraisonDetailsPage = () => {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      {/* Advancements Section */}
+      <Card className="p-3 mb-4">
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h5>Avances</h5>
+          <Button color="primary" size="sm" onClick={addAdvancement}>
+            <FiPlus className="me-1" />
+            Ajouter Avance
+          </Button>
+        </div>
+
+        {formData.advancements.length > 0 ? (
+          <div className="table-responsive">
+            <table className="table table-bordered">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Montant (Dh)</th>
+                  <th>Méthode</th>
+                  <th>Référence</th>
+                  <th>Notes</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {formData.advancements.map((advancement, index) => (
+                  <tr key={advancement.id || index}>
+                    <td>
+                      <DatePicker
+                        selected={advancement.paymentDate}
+                        onChange={(date) =>
+                          handleAdvancementChange(index, "paymentDate", date)
+                        }
+                        className="form-control form-control-sm"
+                        dateFormat="dd/MM/yyyy"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={advancement.amount}
+                        onChange={(e) =>
+                          handleAdvancementChange(
+                            index,
+                            "amount",
+                            parseFloat(e.target.value) || 0,
+                          )
+                        }
+                        min="0.01"
+                        step="0.01"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        className="form-control form-control-sm"
+                        value={advancement.paymentMethod}
+                        onChange={(e) =>
+                          handleAdvancementChange(
+                            index,
+                            "paymentMethod",
+                            e.target.value,
+                          )
+                        }
+                      >
+                        {paymentMethodOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={advancement.reference}
+                        onChange={(e) =>
+                          handleAdvancementChange(
+                            index,
+                            "reference",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="N° chèque, référence..."
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={advancement.notes}
+                        onChange={(e) =>
+                          handleAdvancementChange(
+                            index,
+                            "notes",
+                            e.target.value,
+                          )
+                        }
+                        placeholder="Notes..."
+                      />
+                    </td>
+                    <td>
+                      <Button
+                        color="danger"
+                        size="sm"
+                        onClick={() => removeAdvancement(index)}
+                      >
+                        <FiTrash2 />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="alert alert-info">
+            Aucun avancement enregistré. Cliquez sur "Ajouter Avance" pour en
+            ajouter.
+          </div>
+        )}
       </Card>
 
       {/* Summary */}
@@ -1727,6 +2054,14 @@ const BonLivraisonDetailsPage = () => {
                 >
                   {remainingAmount.toFixed(2)} Dh
                 </span>
+              </div>
+              <div className="d-flex justify-content-between text-secondary mt-2 pt-2 border-top">
+                <span>Total Mètre Lin:</span>
+                <span>{totalMetreLin.toFixed(2)} ML</span>
+              </div>
+              <div className="d-flex justify-content-between text-secondary">
+                <span>Total Surface:</span>
+                <span>{totalSurface.toFixed(4)} m²</span>
               </div>
             </div>
           </Col>

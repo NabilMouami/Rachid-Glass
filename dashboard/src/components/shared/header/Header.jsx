@@ -18,6 +18,7 @@ import TimesheetsModal from "./TimesheetsModal";
 import HeaderDropDownModal from "./HeaderDropDownModal";
 import MegaMenu from "./megaManu/MegaMenu";
 import { NavigationContext } from "../../../contentApi/navigationProvider";
+import { useNavigate } from "react-router-dom";
 
 const Header = () => {
   const { navigationOpen, setNavigationOpen } = useContext(NavigationContext);
@@ -25,6 +26,7 @@ const Header = () => {
   const [navigationExpend, setNavigationExpend] = useState(false);
   const miniButtonRef = useRef(null);
   const expendButtonRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (openMegaMenu) {
@@ -111,6 +113,7 @@ const Header = () => {
     document.documentElement.classList.add("fsh-infullscreen");
     document.querySelector("body").classList.add("full-screen-helper");
   };
+  
   const fullScreenMinimize = () => {
     if (document.exitFullscreen) {
       document.exitFullscreen();
@@ -126,6 +129,11 @@ const Header = () => {
     document.querySelector("body").classList.remove("full-screen-helper");
   };
 
+  // ✅ Correct - uses React Router history, works in Electron too
+  const handleGoBack = (e) => {
+    e.preventDefault();
+    navigate(-1);
+  };
   return (
     <header className="nxl-header">
       <div className="header-wrapper">
@@ -150,8 +158,19 @@ const Header = () => {
               </div>
             </div>
           </a>
-          {/* <!--! [Start] nxl-head-mobile-toggler !-->
-                    <!--! [Start] nxl-navigation-toggle !--> */}
+          {/* <!--! [End] nxl-head-mobile-toggler !--> */}
+
+          {/* 🔙 BACK ARROW - Added here */}
+          <a
+            href="#"
+            className="nxl-head-link"
+            onClick={handleGoBack}
+            title="Go Back"
+          >
+            <FiArrowLeft size={20} />
+          </a>
+
+          {/* <!--! [Start] nxl-navigation-toggle !--> */}
           <div className="nxl-navigation-toggle navigation-up-1600">
             <a
               href="#"
@@ -192,9 +211,6 @@ const Header = () => {
               <FiArrowRight size={24} />
             </a>
           </div>
-
-          {/* <!--! [End] nxl-lavel-mega-menu-toggle !-->
-                    <!--! [Start] nxl-lavel-mega-menu !--> */}
         </div>
         {/* <!--! [End] Header Left !-->
                 <!--! [Start] Header Right !--> */}

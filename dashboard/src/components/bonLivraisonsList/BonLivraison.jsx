@@ -106,6 +106,8 @@ const BonLivraisonTable = () => {
     cancelledBons: 0,
     averageAmount: 0,
     completionRate: 0,
+    paidBonsAmount: 0,
+    paidBonsTotalAmount: 0,
   });
 
   // Fetch data from YOUR API
@@ -177,6 +179,26 @@ const BonLivraisonTable = () => {
     ).length;
     const cancelledBons = data.filter((bon) => bon.status === "annulée").length;
 
+    // Calculate paid amount for "Partiellement Payée" and "Payée" status only
+    const paidBonsAmount = data.reduce((sum, bon) => {
+      if (bon.status === "payée") {
+        // For fully paid, the entire total is the paid amount
+        return sum + (bon.total || 0);
+      } else if (bon.status === "partiellement_payée") {
+        // For partially paid, use the advancement
+        return sum + (bon.advancement || 0);
+      }
+      return sum;
+    }, 0);
+
+    // Calculate total amount for "Partiellement Payée" and "Payée" status only
+    const paidBonsTotalAmount = data.reduce((sum, bon) => {
+      if (bon.status === "partiellement_payée" || bon.status === "payée") {
+        return sum + (bon.total || 0);
+      }
+      return sum;
+    }, 0);
+
     const averageAmount = totalBons > 0 ? totalAmount / totalBons : 0;
     const completionRate =
       totalAmount > 0 ? (totalAdvancements / totalAmount) * 100 : 0;
@@ -192,6 +214,8 @@ const BonLivraisonTable = () => {
       cancelledBons,
       averageAmount,
       completionRate,
+      paidBonsAmount,
+      paidBonsTotalAmount,
     });
   };
 
@@ -207,6 +231,8 @@ const BonLivraisonTable = () => {
       cancelledBons: 0,
       averageAmount: 0,
       completionRate: 0,
+      paidBonsAmount: 0,
+      paidBonsTotalAmount: 0,
     });
   };
 
@@ -282,6 +308,14 @@ const BonLivraisonTable = () => {
   };
 
   const handleInvoiceUpdate = (updatedInvoice) => {
+    const newTotal = parseFloat(updatedInvoice.total) || 0;
+    const newAdvancement =
+      parseFloat(updatedInvoice.advancement) ||
+      parseFloat(updatedInvoice.totalAdvancement) ||
+      0;
+    const newRemainingAmount =
+      parseFloat(updatedInvoice.remainingAmount) || newTotal - newAdvancement;
+
     setBookings((prev) =>
       prev.map((bon) =>
         bon.id === updatedInvoice.id
@@ -290,9 +324,9 @@ const BonLivraisonTable = () => {
               customerName: updatedInvoice.customerName,
               customerPhone: updatedInvoice.customerPhone,
               status: updatedInvoice.status,
-              advancement: updatedInvoice.advancement || 0,
-              remainingAmount:
-                updatedInvoice.remainingAmount || updatedInvoice.total,
+              total: newTotal,
+              advancement: newAdvancement,
+              remainingAmount: newRemainingAmount,
             }
           : bon,
       ),
@@ -306,9 +340,9 @@ const BonLivraisonTable = () => {
               customerName: updatedInvoice.customerName,
               customerPhone: updatedInvoice.customerPhone,
               status: updatedInvoice.status,
-              advancement: updatedInvoice.advancement || 0,
-              remainingAmount:
-                updatedInvoice.remainingAmount || updatedInvoice.total,
+              total: newTotal,
+              advancement: newAdvancement,
+              remainingAmount: newRemainingAmount,
             }
           : bon,
       ),
@@ -603,6 +637,28 @@ const BonLivraisonTable = () => {
             </Card>
           </div>
 
+          {/* Total Payed */}
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <Card className="border-0 shadow-sm h-100">
+              <CardBody className="d-flex align-items-center">
+                <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
+                  <FiDollarSign className="text-white fs-3" />
+                </div>
+                <div>
+                  <h6 className="text-muted mb-1">Total Payé</h6>
+                  <h3 className="mb-0">
+                    {safeToFixed(statistics.paidBonsAmount)} Dh
+                  </h3>
+                  <small className="text-muted">
+                    {statistics.paidBonsTotalAmount > 0
+                      ? `${((statistics.paidBonsAmount / statistics.paidBonsTotalAmount) * 100).toFixed(1)}%`
+                      : "0%"}
+                  </small>
+                </div>
+              </CardBody>
+            </Card>
+          </div>
+
           {/* Paid Bons */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <Card className="border-0 shadow-sm h-100">
@@ -668,38 +724,6 @@ const BonLivraisonTable = () => {
                   <h3 className="mb-0">
                     {safeToFixed(statistics.totalRemaining)} Dh
                   </h3>
-                </div>
-              </CardBody>
-            </Card>
-          </div>
-
-          {/* Completion Rate */}
-          <div className="col-xl-3 col-lg-4 col-md-6">
-            <Card className="border-0 shadow-sm h-100">
-              <CardBody className="d-flex align-items-center">
-                <div className="bg-info bg-opacity-10 rounded-circle p-3 me-3">
-                  <FiPercent className="text-white fs-3" />
-                </div>
-                <div>
-                  <h6 className="text-muted mb-1">Taux Paiement</h6>
-                  <h3 className="mb-0">
-                    {safeToFixed(statistics.completionRate, 1)}%
-                  </h3>
-                </div>
-              </CardBody>
-            </Card>
-          </div>
-
-          {/* Cancelled */}
-          <div className="col-xl-3 col-lg-4 col-md-6">
-            <Card className="border-0 shadow-sm h-100">
-              <CardBody className="d-flex align-items-center">
-                <div className="bg-dark bg-opacity-10 rounded-circle p-3 me-3">
-                  <FiFileText className="text-white fs-3" />
-                </div>
-                <div>
-                  <h6 className="text-muted mb-1">Annulés</h6>
-                  <h3 className="mb-0">{statistics.cancelledBons}</h3>
                 </div>
               </CardBody>
             </Card>

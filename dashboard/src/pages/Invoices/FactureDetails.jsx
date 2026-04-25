@@ -23,6 +23,7 @@ import {
   FiX,
 } from "react-icons/fi";
 import AsyncSelect from "react-select/async";
+import Select from "react-select";
 import { components } from "react-select";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -243,6 +244,9 @@ const FactureDetailsPage = () => {
   const [facture, setFacture] = useState(null);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [loadingClients, setLoadingClients] = useState(true);
   const [formData, setFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -284,6 +288,48 @@ const FactureDetailsPage = () => {
     };
     fetchProducts();
   }, []);
+
+  // Fetch clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoadingClients(true);
+      try {
+        const response = await axios.get(`${config_url}/api/clients`);
+        const clientOptions = (response.data?.clients || []).map((client) => {
+          const refPart = client.reference ? `(${client.reference}) ` : "";
+          return {
+            value: client.id,
+            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+            searchText: [
+              client.nom_complete?.toLowerCase() || "",
+              client.telephone?.toLowerCase() || "",
+              client.reference?.toLowerCase() || "",
+            ].join(" "),
+            ...client,
+          };
+        });
+        setClients(clientOptions);
+      } catch (error) {
+        console.error("Error fetching clients:", error);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    fetchClients();
+  }, []);
+
+  // Handle client selection
+  const handleClientSelect = (clientId) => {
+    setSelectedClientId(clientId);
+    const selectedClient = clients.find((c) => c.value == clientId);
+    if (selectedClient) {
+      setFormData((prev) => ({
+        ...prev,
+        customerName: selectedClient.nom_complete || "",
+        customerPhone: selectedClient.telephone || "",
+      }));
+    }
+  };
 
   // Load products for async select
   const loadProduits = async (inputValue) => {
@@ -1011,6 +1057,29 @@ const FactureDetailsPage = () => {
               <FiUser className="me-2" /> Client
             </h5>
             <div className="mt-2">
+              <div className="form-group mb-3">
+                <label className="form-label">Sélectionner un Client</label>
+                <Select
+                  options={clients}
+                  value={
+                    selectedClientId
+                      ? clients.find((c) => c.value == selectedClientId)
+                      : null
+                  }
+                  onChange={(option) => handleClientSelect(option?.value || "")}
+                  placeholder="Choisissez un client..."
+                  isClearable
+                  isSearchable
+                  isLoading={loadingClients}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      backgroundColor: "#fff",
+                      borderColor: "#ddd",
+                    }),
+                  }}
+                />
+              </div>
               <div className="form-group mb-3">
                 <label className="form-label">Nom Client *</label>
                 <input

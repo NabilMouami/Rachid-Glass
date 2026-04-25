@@ -31,6 +31,7 @@ import html2canvas from "html2canvas";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import AsyncSelect from "react-select/async";
+import Select from "react-select";
 
 const MySwal = withReactContent(Swal);
 
@@ -40,6 +41,48 @@ const roundToNextMultipleOfThree = (value) => {
   if (isNaN(numValue) || numValue <= 0) return 1;
   if (numValue % 3 === 0) return numValue;
   return Math.ceil(numValue / 3) * 3;
+};
+
+// Helper function to calculate total price
+const calculateItemTotalPrice = (v1, v2, qty, price) => {
+  const numV1 = parseFloat(v1) || 0;
+  const numV2 = parseFloat(v2) || 0;
+  const numQty = parseFloat(qty) || 0;
+  const numPrice = parseFloat(price) || 0;
+
+  // If both v1 and v2 are 1, calculate as simple: qty * price
+  if (numV1 === 1 && numV2 === 1) {
+    return numQty * numPrice;
+  }
+
+  // Otherwise use the roundToNextMultipleOfThree formula
+  const calcV1 = roundToNextMultipleOfThree(numV1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(numV2) / 100;
+  return numQty * calcV1 * calcV2 * numPrice;
+};
+
+// Calculate Metre Lin for an item (only for non-simple items)
+const calculateMetreLin = (item) => {
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  // Return 0 for simple calculations (v1=1 and v2=1)
+  if (v1 === 1 && v2 === 1) return 0;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const qty = parseFloat(item.quantity) || 0;
+  return (calcV1 + calcV2) * 2 * qty;
+};
+
+// Calculate Surface for an item (only for non-simple items)
+const calculateSurface = (item) => {
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  // Return 0 for simple calculations (v1=1 and v2=1)
+  if (v1 === 1 && v2 === 1) return 0;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const qty = parseFloat(item.quantity) || 0;
+  return qty * calcV1 * calcV2;
 };
 
 // Custom ClearIndicator for react-select
@@ -235,6 +278,9 @@ const DevisDetailsPage = () => {
   const [devis, setDevis] = useState(null);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [loadingClients, setLoadingClients] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     customerName: "",
@@ -277,6 +323,48 @@ const DevisDetailsPage = () => {
     };
     fetchProducts();
   }, []);
+
+  // Fetch clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoadingClients(true);
+      try {
+        const response = await axios.get(`${config_url}/api/clients`);
+        const clientOptions = (response.data?.clients || []).map((client) => {
+          const refPart = client.reference ? `(${client.reference}) ` : "";
+          return {
+            value: client.id,
+            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+            searchText: [
+              client.nom_complete?.toLowerCase() || "",
+              client.telephone?.toLowerCase() || "",
+              client.reference?.toLowerCase() || "",
+            ].join(" "),
+            ...client,
+          };
+        });
+        setClients(clientOptions);
+      } catch (error) {
+        console.error("Error fetching clients:", error);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    fetchClients();
+  }, []);
+
+  // Handle client selection
+  const handleClientSelect = (clientId) => {
+    setSelectedClientId(clientId);
+    const selectedClient = clients.find((c) => c.value == clientId);
+    if (selectedClient) {
+      setFormData((prev) => ({
+        ...prev,
+        customerName: selectedClient.nom_complete || "",
+        customerPhone: selectedClient.telephone || "",
+      }));
+    }
+  };
 
   // Load products for async select
   const loadProduits = async (inputValue) => {
@@ -339,11 +427,12 @@ const DevisDetailsPage = () => {
         produit_id: selectedOption.value,
         produit: produit,
         unitPrice: parseFloat(produit.prix_vente) || 0,
-        totalPrice:
-          (updatedItems[index].quantity || 0) *
-          (roundToNextMultipleOfThree(parseFloat(updatedItems[index].v1) || 0) / 100) *
-          (roundToNextMultipleOfThree(parseFloat(updatedItems[index].v2) || 0) / 100) *
-          (parseFloat(produit.prix_vente) || 0),
+        totalPrice: calculateItemTotalPrice(
+          updatedItems[index].v1,
+          updatedItems[index].v2,
+          updatedItems[index].quantity,
+          parseFloat(produit.prix_vente) || 0,
+        ),
       };
     }
 
@@ -378,11 +467,12 @@ const DevisDetailsPage = () => {
               v1: parseFloat(ligne.v1) || 1,
               v2: parseFloat(ligne.v2) || 1,
               unitPrice: parseFloat(ligne.prix_unitaire) || 0,
-              totalPrice:
-                (parseFloat(ligne.quantite) || 0) *
-                (roundToNextMultipleOfThree(parseFloat(ligne.v1) || 0) / 100) *
-                (roundToNextMultipleOfThree(parseFloat(ligne.v2) || 0) / 100) *
-                (parseFloat(ligne.prix_unitaire) || 0),
+              totalPrice: calculateItemTotalPrice(
+                ligne.v1,
+                ligne.v2,
+                ligne.quantite,
+                ligne.prix_unitaire,
+              ),
               produit_id: ligne.produit_id,
               produit: ligne.produit || null,
             };
@@ -432,6 +522,18 @@ const DevisDetailsPage = () => {
   // Calculations
   const subTotal = formData.items.reduce(
     (sum, item) => sum + (parseFloat(item.totalPrice) || 0),
+    0,
+  );
+
+  // Calculate sum of all Metre Lin (excluding simple items)
+  const totalMetreLin = formData.items.reduce(
+    (sum, item) => sum + calculateMetreLin(item),
+    0,
+  );
+
+  // Calculate sum of all Surface (excluding simple items)
+  const totalSurface = formData.items.reduce(
+    (sum, item) => sum + calculateSurface(item),
     0,
   );
 
@@ -490,10 +592,12 @@ const DevisDetailsPage = () => {
     };
 
     const item = updatedItems[index];
-    const calcV1 = roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100;
-    const calcV2 = roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100;
-    updatedItems[index].totalPrice =
-      (parseFloat(item.quantity) || 0) * calcV1 * calcV2 * (parseFloat(item.unitPrice) || 0);
+    updatedItems[index].totalPrice = calculateItemTotalPrice(
+      item.v1,
+      item.v2,
+      item.quantity,
+      item.unitPrice,
+    );
 
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
@@ -747,21 +851,30 @@ const DevisDetailsPage = () => {
     </thead>
     <tbody>
       ${formData.items
-        .map(
-          (item) => `
+        .map((item) => {
+          const v1 = parseFloat(item.v1) || 1;
+          const v2 = parseFloat(item.v2) || 1;
+          const isSimpleCalc = v1 === 1 && v2 === 1;
+          const qty = parseFloat(item.quantity) || 0;
+
+          // Calculate metre lin and surface with rounded values
+          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+
+          return `
         <tr>
           <td>${item.code || "—"}</td>
           <td>${item.designation || "—"}</td>
           <td class="text-center">${item.quantity || 0}</td>
-          <td class="text-center">${item.v1 || 1}</td>
-          <td class="text-center">${item.v2 || 1}</td>
-          <td class="text-center">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td class="text-center">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td class="text-center">${(parseFloat(item.v1) || 1) === 1 ? "-" : item.v1 || 1}</td>
+          <td class="text-center">${(parseFloat(item.v2) || 1) === 1 ? "-" : item.v2 || 1}</td>
+          <td class="text-center">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+          <td class="text-center">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
           <td class="text-end">${formatAmount(item.unitPrice || 0)}</td>
           <td class="text-end">${formatAmount(item.totalPrice || 0)}</td>
         </tr>
-      `,
-        )
+      `;
+        })
         .join("")}
     </tbody>
   </table>
@@ -772,6 +885,8 @@ const DevisDetailsPage = () => {
     <div class="net-box">
       TOTAL : ${formatAmount(totalAfterDiscount)} DH
     </div>
+    <div>Total Mètre Lin: ${totalMetreLin.toFixed(2)} ML</div>
+    <div>Total Surface: ${totalSurface.toFixed(4)} m²</div>
     <div class="italic">
       ${totalToFrenchText(totalAfterDiscount)}
     </div>
@@ -871,21 +986,30 @@ const DevisDetailsPage = () => {
           </thead>
           <tbody>
             ${formData.items
-              .map(
-                (item, index) => `
+              .map((item, index) => {
+                const v1 = parseFloat(item.v1) || 1;
+                const v2 = parseFloat(item.v2) || 1;
+                const isSimpleCalc = v1 === 1 && v2 === 1;
+                const qty = parseFloat(item.quantity) || 0;
+
+                // Calculate metre lin and surface with rounded values
+                const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+                const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+
+                return `
                 <tr style="${index % 2 === 0 ? "background:#f9f9f9;" : ""}">
                   <td style="border:1px solid #ddd; padding:6px;">${item.code || "—"}</td>
                   <td style="border:1px solid #ddd; padding:6px;">${item.designation || "—"}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:center;">${item.quantity || 0}</td>
-                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${item.v1 || 1}</td>
-                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${item.v2 || 1}</td>
-                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${v1 === 1 ? "-" : item.v1 || 1}</td>
+                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${v2 === 1 ? "-" : item.v2 || 1}</td>
+                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+                  <td style="border:1px solid #ddd; padding:6px; text-align:center;">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:right;">${formatAmount(item.unitPrice || 0)}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:right;">${formatAmount(item.totalPrice || 0)}</td>
                 </tr>
-              `,
-              )
+              `;
+              })
               .join("")}
           </tbody>
         </table>
@@ -896,6 +1020,8 @@ const DevisDetailsPage = () => {
           <div style="display:inline-block; border:2px solid #2c5aa0; color:#2c5aa0; padding:12px 18px; font-weight:bold; margin-top:8px; font-size:14px;">
             TOTAL : ${formatAmount(totalAfterDiscount)} DH
           </div>
+          <div style="margin:2px 0; margin-top:12px;">Total Mètre Lin: ${totalMetreLin.toFixed(2)} ML</div>
+          <div style="margin:2px 0;">Total Surface: ${totalSurface.toFixed(4)} m²</div>
           <div style="font-style:italic; margin-top:10px; font-size:10px; font-weight:bold;">
             ${totalToFrenchText(totalAfterDiscount)}
           </div>
@@ -1008,6 +1134,29 @@ const DevisDetailsPage = () => {
               <FiUser className="me-2" /> Client
             </h5>
             <div className="mt-2">
+              <div className="form-group mb-3">
+                <label className="form-label">Sélectionner un Client</label>
+                <Select
+                  options={clients}
+                  value={
+                    selectedClientId
+                      ? clients.find((c) => c.value == selectedClientId)
+                      : null
+                  }
+                  onChange={(option) => handleClientSelect(option?.value || "")}
+                  placeholder="Choisissez un client..."
+                  isClearable
+                  isSearchable
+                  isLoading={loadingClients}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      backgroundColor: "#fff",
+                      borderColor: "#ddd",
+                    }),
+                  }}
+                />
+              </div>
               <div className="form-group mb-3">
                 <label className="form-label">Nom Client *</label>
                 <input
@@ -1196,30 +1345,38 @@ const DevisDetailsPage = () => {
 
                     {/* Longueur - INPUT */}
                     <td>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        value={item.v1}
-                        onChange={(e) =>
-                          handleItemChange(index, "v1", e.target.value)
-                        }
-                        min="0.01"
-                        step="0.01"
-                      />
+                      {parseFloat(item.v1) === 1 ? (
+                        <span className="text-primary fw-bold">-</span>
+                      ) : (
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={item.v1}
+                          onChange={(e) =>
+                            handleItemChange(index, "v1", e.target.value)
+                          }
+                          min="0.01"
+                          step="0.01"
+                        />
+                      )}
                     </td>
 
                     {/* Largeur - INPUT */}
                     <td>
-                      <input
-                        type="number"
-                        className="form-control form-control-sm"
-                        value={item.v2}
-                        onChange={(e) =>
-                          handleItemChange(index, "v2", e.target.value)
-                        }
-                        min="0.01"
-                        step="0.01"
-                      />
+                      {parseFloat(item.v2) === 1 ? (
+                        <span className="text-primary fw-bold">-</span>
+                      ) : (
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={item.v2}
+                          onChange={(e) =>
+                            handleItemChange(index, "v2", e.target.value)
+                          }
+                          min="0.01"
+                          step="0.01"
+                        />
+                      )}
                     </td>
 
                     {/* prix/Unité - INPUT */}
@@ -1343,6 +1500,14 @@ const DevisDetailsPage = () => {
               <div className="d-flex justify-content-between mb-2 fw-bold border-top pt-2">
                 <span>Total:</span>
                 <span>{formatAmount(totalAfterDiscount)} Dh</span>
+              </div>
+              <div className="d-flex justify-content-between mt-2 pt-2 border-top small text-secondary">
+                <span>Total Mètre Lin:</span>
+                <span>{totalMetreLin.toFixed(2)} ML</span>
+              </div>
+              <div className="d-flex justify-content-between small text-secondary">
+                <span>Total Surface:</span>
+                <span>{totalSurface.toFixed(4)} m²</span>
               </div>
               <div className="mt-3 small fst-italic">
                 <strong>{totalToFrenchText(totalAfterDiscount)}</strong>

@@ -16,12 +16,13 @@ import {
   FiCreditCard,
   FiAlertCircle,
   FiEye,
+  FiPrinter,
 } from "react-icons/fi";
 
 const statusOptions = [
   { value: "all", label: "Tous les statuts" },
   { value: "brouillon", label: "Non Payé" },
-  { value: "payé", label: "Payé" },
+  { value: "payée", label: "Payé" },
   { value: "partiellement_payée", label: "Partiellement Payé" },
   { value: "annulée", label: "Annulé" },
 ];
@@ -44,7 +45,7 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
       setError(null);
 
       const response = await axios.get(
-        `${config_url}/api/clients/${clientId}/payment-status`,
+        `${config_url}/api/clients/${clientId}/payment-status?includeDetails=true&includeAll=true`,
         { withCredentials: true },
       );
 
@@ -88,7 +89,7 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
     const colors = {
       brouillon: "bg-danger text-white",
       envoyé: "bg-primary text-white",
-      payé: "bg-success text-white",
+      payée: "bg-success text-white",
       partiellement_payée: "bg-warning text-dark",
       en_retard: "bg-danger text-white",
       annulée: "bg-dark text-white",
@@ -100,7 +101,7 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   const getStatusText = (status) => {
     const texts = {
       brouillon: "Non Payé",
-      payé: "Payé",
+      payée: "Payé",
       partiellement_payée: "Partiellement Payé",
       annulée: "Annulé",
     };
@@ -110,7 +111,7 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   // Get status icon
   const getStatusIcon = (status) => {
     switch (status) {
-      case "payé":
+      case "payée":
       case "payée":
         return <FiCheckCircle className="me-1" />;
       case "partiellement_payée":
@@ -139,6 +140,175 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
     fetchPaymentStatus();
   };
 
+  // Handle print
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const blOnly = bonLivraisonsOnly;
+    const totalAmount = blOnly.reduce((sum, doc) => sum + (parseFloat(doc.montantTTC) || 0), 0);
+    const totalPaid = blOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalPaid) || 0), 0);
+    const totalRemaining = blOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalRemaining) || 0), 0);
+
+    const content = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>État de Paiement - ${clientName}</title>
+  <meta charset="UTF-8" />
+  <style>
+    @page { margin: 10mm; size: A4; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 11px;
+      color: #000;
+      margin: 0;
+      padding: 10mm;
+    }
+    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+    .header h2 { margin: 0; font-size: 18px; }
+    .client-info { margin-bottom: 20px; }
+    .client-info strong { font-size: 14px; }
+    .summary-cards { display: flex; gap: 15px; margin-bottom: 20px; }
+    .summary-card {
+      flex: 1;
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: center;
+    }
+    .summary-card h4 { margin: 0 0 5px 0; font-size: 10px; color: #666; }
+    .summary-card .amount { font-size: 14px; font-weight: bold; }
+    .summary-card.total { background: #f5f5f5; }
+    .summary-card.paid { background: #e8f5e9; }
+    .summary-card.remaining { background: #ffebee; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #000; padding: 6px; text-align: left; }
+    th { background: #f2f2f2; font-size: 10px; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .text-success { color: #28a745; }
+    .text-danger { color: #dc3545; }
+    .badge { padding: 2px 6px; border-radius: 3px; font-size: 9px; }
+    .badge-danger { background: #dc3545; color: white; }
+    .badge-success { background: #28a745; color: white; }
+    .badge-warning { background: #ffc107; color: #000; }
+    .badge-primary { background: #007bff; color: white; }
+    .badge-dark { background: #343a40; color: white; }
+    .footer { margin-top: 20px; border-top: 1px solid #000; padding-top: 10px; text-align: center; font-size: 9px; }
+    @media print { body { padding: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>État de Paiement - Client</h2>
+    <p>STE. RACHIGLASS S.A.R.L. A.U</p>
+  </div>
+
+  <div class="client-info">
+    <strong>Client:</strong> ${clientName}<br/>
+    <strong>Date:</strong> ${new Date().toLocaleDateString("fr-FR")}
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card total">
+      <h4>MONTANT TOTAL BL</h4>
+      <div class="amount">${formatCurrency(totalAmount)}</div>
+    </div>
+    <div class="summary-card paid">
+      <h4>DÉJÀ PAYÉ</h4>
+      <div class="amount text-success">${formatCurrency(totalPaid)}</div>
+    </div>
+    <div class="summary-card remaining">
+      <h4>RESTE À PAYER</h4>
+      <div class="amount text-danger">${formatCurrency(totalRemaining)}</div>
+    </div>
+  </div>
+
+  <h3>Bon Livraisons</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Numéro</th>
+        <th>Date</th>
+        <th>Statut</th>
+        <th class="text-right">Montant TTC</th>
+        <th class="text-right">Déjà Payé</th>
+        <th class="text-right">Reste à Payer</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${blOnly.map(doc => `
+        <tr>
+          <td>
+            ${doc.numero}
+            ${doc.is_facture === false ? '<br><small style="color:#666;">Non facturé</small>' : ''}
+          </td>
+          <td>${formatDate(doc.date)}</td>
+          <td><span class="badge ${getStatusColor(doc.paymentStatus)}">${getStatusText(doc.paymentStatus)}</span></td>
+          <td class="text-right">${formatCurrency(doc.montantTTC)}</td>
+          <td class="text-right text-success">${formatCurrency(doc.totalPaid)}</td>
+          <td class="text-right text-danger">${formatCurrency(doc.totalRemaining)}</td>
+        </tr>
+      `).join("")}
+      <tr style="background:#f2f2f2;font-weight:bold;">
+        <td colspan="3" class="text-right">TOTAUX:</td>
+        <td class="text-right">${formatCurrency(totalAmount)}</td>
+        <td class="text-right text-success">${formatCurrency(totalPaid)}</td>
+        <td class="text-right text-danger">${formatCurrency(totalRemaining)}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  ${paymentData?.advancements?.length > 0 ? `
+  <h3 style="margin-top:20px;">Historique des Avancements</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Montant</th>
+        <th>Mode de Paiement</th>
+        <th>Référence</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${paymentData.advancements.map(adv => `
+        <tr>
+          <td>${formatDate(adv.paymentDate)}</td>
+          <td class="text-success">${formatCurrency(adv.amount)}</td>
+          <td>${adv.paymentMethod === 'espece' ? 'Espèce' : adv.paymentMethod === 'cheque' ? 'Chèque' : adv.paymentMethod === 'virement' ? 'Virement' : adv.paymentMethod === 'carte' ? 'Carte' : adv.paymentMethod || '-'}</td>
+          <td>${adv.reference || '-'}</td>
+        </tr>
+      `).join("")}
+      <tr style="background:#f2f2f2;font-weight:bold;">
+        <td colspan="2" class="text-right">TOTAL AVANCEMENTS:</td>
+        <td colspan="2" class="text-right text-success">${formatCurrency(paymentData.advancements.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0))}</td>
+      </tr>
+    </tbody>
+  </table>
+  ` : ''}
+
+  <div class="footer">
+    <p>Généré le ${new Date().toLocaleString("fr-FR")}</p>
+    <p>STE. RACHIGLASS S.A.R.L. A.U - VENTE TOUS TYPE DE VERRE</p>
+  </div>
+
+  <script>
+    window.onload = function() { window.print(); setTimeout(() => window.close(), 100); };
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.open();
+    printWindow.document.write(content);
+    printWindow.document.close();
+  };
+
+  // Filter to show only Bon Livraisons
+  const bonLivraisonsOnly = paymentData?.documents?.filter(
+    (doc) => doc.type === "bon-livraison"
+  ) || [];
+
   // Handle view document
   const handleViewDocument = (doc) => {
     if (doc.type === "bon-livraison") {
@@ -151,16 +321,16 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   if (loading) {
     return (
       <div
-        className="modal fade show d-block"
+        className="modal fade show d-block" onClick={onClose}
         style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
       >
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
           <div className="modal-content">
-            <div className="modal-header">
+            <div className="modal-header position-relative">
               <h5 className="modal-title">Statut de Paiement</h5>
               <button
                 type="button"
-                className="btn-close"
+                className="btn-close position-absolute" style={{ top: "15px", right: "15px" }}
                 onClick={onClose}
               ></button>
             </div>
@@ -179,16 +349,16 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   if (error) {
     return (
       <div
-        className="modal fade show d-block"
+        className="modal fade show d-block" onClick={onClose}
         style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
       >
-        <div className="modal-dialog modal-lg">
+        <div className="modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
           <div className="modal-content">
-            <div className="modal-header">
+            <div className="modal-header position-relative">
               <h5 className="modal-title">Statut de Paiement</h5>
               <button
                 type="button"
-                className="btn-close"
+                className="btn-close position-absolute" style={{ top: "15px", right: "15px" }}
                 onClick={onClose}
               ></button>
             </div>
@@ -208,15 +378,15 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
 
   return (
     <div
-      className="modal fade show d-block"
+      className="modal fade show d-block" onClick={onClose}
       style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
     >
-      <div className="modal-dialog modal-xl">
+      <div className="modal-dialog modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-content">
           {/* Header */}
-          <div className="modal-header bg-light">
+          <div className="modal-header bg-light position-relative">
             <div>
-              <h5 className="modal-title mb-1">Statut de Paiement - Client</h5>
+              <h5 className="modal-title mb-1">État de Paiement - Client (Tous les Statuts)</h5>
               <p className="text-muted mb-0 small">
                 {clientName} | Dernière mise à jour:{" "}
                 {paymentData?.timestamp
@@ -224,10 +394,18 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                   : "-"}
               </p>
             </div>
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-2 pe-5">
               <button
                 type="button"
-                className="btn-close"
+                className="btn btn-primary"
+                onClick={handlePrint}
+                title="Imprimer"
+              >
+                <FiPrinter className="me-1" /> Imprimer
+              </button>
+              <button
+                type="button"
+                className="btn-close position-absolute" style={{ top: "15px", right: "15px" }}
                 onClick={onClose}
               ></button>
             </div>
@@ -237,16 +415,18 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
           <div className="modal-body">
             {paymentData && (
               <>
-                {/* Statistics Cards */}
+{/* Statistics Cards - Bon Livraisons Only */}
                 <div className="row mb-4">
                   <div className="col-md-4 mb-3">
                     <div className="card border-primary">
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center">
                           <div>
-                            <h6 className="text-muted mb-1">Montant Total</h6>
+                            <h6 className="text-muted mb-1">Montant Total BL</h6>
                             <h3 className="mb-0">
-                              {formatCurrency(paymentData.summary.totals.totalAmount)}
+                              {formatCurrency(
+                                bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.montantTTC) || 0), 0)
+                              )}
                             </h3>
                           </div>
                           <div className="bg-primary bg-opacity-10 p-3 rounded">
@@ -262,20 +442,12 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center">
                           <div>
-                            <h6 className="text-muted mb-1">Déjà Payé</h6>
+                            <h6 className="text-muted mb-1">Déjà Payé BL</h6>
                             <h3 className="mb-0">
-                              {formatCurrency(paymentData.summary.totals.totalPaid)}
+                              {formatCurrency(
+                                bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalPaid) || 0), 0)
+                              )}
                             </h3>
-                            <small className="text-muted">
-                              {paymentData.summary.totals.totalAmount > 0
-                                ? Math.round(
-                                    (paymentData.summary.totals.totalPaid /
-                                      paymentData.summary.totals.totalAmount) *
-                                      100,
-                                  )
-                                : 0}
-                              % du total
-                            </small>
                           </div>
                           <div className="bg-success bg-opacity-10 p-3 rounded">
                             <FiCheckCircle size={24} className="text-white" />
@@ -290,16 +462,12 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center">
                           <div>
-                            <h6 className="text-muted mb-1">Reste à Payer</h6>
+                            <h6 className="text-muted mb-1">Reste à Payer BL</h6>
                             <h3 className="mb-0">
-                              {formatCurrency(paymentData.summary.totals.totalRemaining)}
+                              {formatCurrency(
+                                bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalRemaining) || 0), 0)
+                              )}
                             </h3>
-                            <small className="text-muted">
-                              {paymentData.summary.counts.brouillon} Non
-                              Payé(s),{" "}
-                              {paymentData.summary.counts.partiellement_payée}{" "}
-                              partiellement payé(s)
-                            </small>
                           </div>
                           <div className="bg-danger bg-opacity-10 p-3 rounded">
                             <FiCreditCard size={24} className="text-white" />
@@ -317,12 +485,12 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                       <div className="card-header">
                         <h6 className="card-title mb-0">
                           <FiFileText className="me-2" />
-                          Documents en Attente de Paiement (
-                          {paymentData.documents.length})
+                          Bon Livraisons en Attente de Paiement (
+                          {bonLivraisonsOnly.length})
                         </h6>
                       </div>
                       <div className="card-body">
-                        {paymentData.documents.length === 0 ? (
+                        {bonLivraisonsOnly.length === 0 ? (
                           <div className="text-center py-4">
                             <FiCheckCircle
                               size={48}
@@ -338,7 +506,6 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                             <table className="table table-hover">
                               <thead>
                                 <tr>
-                                  <th>Type</th>
                                   <th>Numéro</th>
                                   <th>Date</th>
                                   <th>Statut</th>
@@ -349,26 +516,15 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                 </tr>
                               </thead>
                               <tbody>
-                                {paymentData.documents.map((doc, index) => (
+                                {bonLivraisonsOnly.map((doc, index) => (
                                   <tr key={index}>
                                     <td>
-                                      <span className="d-flex align-items-center">
-                                        {getDocumentIcon(doc.type)}
-                                        <span className="text-capitalize">
-                                          {doc.type === "bon-livraison"
-                                            ? "Bon Livraison"
-                                            : "Facture"}
-                                        </span>
-                                      </span>
-                                    </td>
-                                    <td>
                                       <strong>{doc.numero}</strong>
-                                      {doc.is_facture === false &&
-                                        doc.type === "bon-livraison" && (
-                                          <div className="small text-muted">
-                                            Non facturé
-                                          </div>
-                                        )}
+                                      {doc.is_facture === false && (
+                                        <div className="small text-muted">
+                                          Non facturé
+                                        </div>
+                                      )}
                                     </td>
                                     <td>
                                       <span className="d-flex align-items-center">
@@ -421,25 +577,31 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                     </td>
                                   </tr>
                                 ))}
-                              </tbody>
+</tbody>
                               <tfoot>
                                 <tr className="table-active">
-                                  <td colSpan="4" className="text-end">
+                                  <td colSpan="3" className="text-end">
                                     <strong>Totaux:</strong>
                                   </td>
                                   <td>
                                     <strong>
-                                      {formatCurrency(paymentData.summary.totals.totalAmount)}
+                                      {formatCurrency(
+                                        bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.montantTTC) || 0), 0)
+                                      )}
                                     </strong>
                                   </td>
                                   <td>
                                     <strong className="text-success">
-                                      {formatCurrency(paymentData.summary.totals.totalPaid)}
+                                      {formatCurrency(
+                                        bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalPaid) || 0), 0)
+                                      )}
                                     </strong>
                                   </td>
                                   <td>
                                     <strong className="text-danger">
-                                      {formatCurrency(paymentData.summary.totals.totalRemaining)}
+                                      {formatCurrency(
+                                        bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalRemaining) || 0), 0)
+                                      )}
                                     </strong>
                                   </td>
                                   <td></td>
@@ -453,6 +615,75 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                   </div>
                 </div>
               </>
+            )}
+
+            {/* Advancements Table */}
+            {paymentData?.advancements && paymentData.advancements.length > 0 && (
+              <div className="row mt-4">
+                <div className="col-12">
+                  <div className="card">
+                    <div className="card-header">
+                      <h6 className="card-title mb-0">
+                        <FiDollarSign className="me-2" />
+                        Historique des Avancements ({paymentData.advancements.length})
+                      </h6>
+                    </div>
+                    <div className="card-body">
+                      <div className="table-responsive">
+                        <table className="table table-hover">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Montant</th>
+                              <th>Mode de Paiement</th>
+                              <th>Référence</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paymentData.advancements.map((adv, index) => (
+                              <tr key={index}>
+                                <td>
+                                  <span className="d-flex align-items-center">
+                                    <FiCalendar className="me-1 text-muted" />
+                                    {formatDate(adv.paymentDate)}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className="text-success fw-bold">
+                                    {formatCurrency(adv.amount)}
+                                  </span>
+                                </td>
+                                <td>
+                                  {adv.paymentMethod === 'espece' ? 'Espèce' :
+                                   adv.paymentMethod === 'cheque' ? 'Chèque' :
+                                   adv.paymentMethod === 'virement' ? 'Virement' :
+                                   adv.paymentMethod === 'carte' ? 'Carte' :
+                                   adv.paymentMethod || '-'}
+                                </td>
+                                <td>{adv.reference || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="table-active">
+                              <td colSpan="2" className="text-end">
+                                <strong>Total Avancements:</strong>
+                              </td>
+                              <td colspan="2">
+                                <strong className="text-success">
+                                  {formatCurrency(
+                                    paymentData.advancements.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0)
+                                  )}
+                                </strong>
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 

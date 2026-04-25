@@ -26,6 +26,7 @@ import Swal from "sweetalert2";
 
 import withReactContent from "sweetalert2-react-content";
 import AsyncSelect from "react-select/async";
+import Select from "react-select";
 import { components } from "react-select";
 
 const MySwal = withReactContent(Swal);
@@ -281,6 +282,9 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
   const [statusKey, setStatusKey] = useState(0); // Force re-render of status select
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [loadingClients, setLoadingClients] = useState(true);
   const [formData, setFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -324,6 +328,45 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     };
     fetchProducts();
   }, []);
+
+  // Fetch clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoadingClients(true);
+      try {
+        const response = await axios.get(`${config_url}/api/clients`);
+        const clientOptions = (response.data?.clients || []).map((client) => {
+          const refPart = client.reference ? `(${client.reference}) ` : "";
+          return {
+            value: client.id,
+            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+            searchText: [
+              client.nom_complete?.toLowerCase() || "",
+              client.telephone?.toLowerCase() || "",
+              client.reference?.toLowerCase() || "",
+            ].join(" "),
+            ...client,
+          };
+        });
+        setClients(clientOptions);
+      } catch (error) {
+        console.error("Error fetching clients:", error);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    fetchClients();
+  }, []);
+
+  // Handle client selection
+  const handleClientSelect = (clientId) => {
+    setSelectedClientId(clientId);
+    const selectedClient = clients.find((c) => c.value == clientId);
+    if (selectedClient) {
+      handleInputChange("customerName", selectedClient.nom_complete || "");
+      handleInputChange("customerPhone", selectedClient.telephone || "");
+    }
+  };
 
   // Load products for async select
   const loadProduits = async (inputValue) => {
@@ -373,22 +416,25 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         produit_id: null,
         produit: null,
         unitPrice: 0,
-        totalPrice: calculateItemTotal({
-          ...updatedItems[index],
-          unitPrice: 0,
-        }),
+        totalPrice: 0,
       };
     } else {
       const produit = selectedOption.data;
+      const newV1 = parseFloat(produit.L1) || updatedItems[index].v1 || 1;
+      const newV2 = parseFloat(produit.L2) || updatedItems[index].v2 || 1;
       updatedItems[index] = {
         ...updatedItems[index],
         code: produit.reference,
         designation: produit.designation,
         produit_id: selectedOption.value,
         produit: produit,
+        v1: newV1,
+        v2: newV2,
         unitPrice: parseFloat(produit.prix_vente) || 0,
         totalPrice: calculateItemTotal({
-          ...updatedItems[index],
+          quantity: updatedItems[index].quantity,
+          v1: newV1,
+          v2: newV2,
           unitPrice: parseFloat(produit.prix_vente) || 0,
         }),
       };
@@ -467,7 +513,12 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
             v3: parseFloat(ligne.v3) || 1,
             unitPrice: parseFloat(ligne.prix_unitaire) || 0,
             remise_ligne: parseFloat(ligne.remise_ligne) || 0,
-            totalPrice: parseFloat(ligne.total_ligne) || 0,
+            totalPrice: calculateItemTotal({
+              quantity: parseFloat(ligne.quantite) || 0,
+              v1: parseFloat(ligne.v1) || 1,
+              v2: parseFloat(ligne.v2) || 1,
+              unitPrice: parseFloat(ligne.prix_unitaire) || 0,
+            }),
             produit_id: ligne.produit_id,
             bon_livraison_id: ligne.bon_livraison_id,
             deliveredQuantity: parseFloat(ligne.deliveredQuantity) || 0,
@@ -506,6 +557,11 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         preparedBy: invoice.preparedBy || "",
         deliveredBy: invoice.deliveredBy || "",
       });
+
+      // Set selected client ID from invoice
+      if (invoice.client_id) {
+        setSelectedClientId(invoice.client_id);
+      }
     }
   }, [invoice]);
 
@@ -529,19 +585,67 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   };
 
   const calculateItemTotal = (item) => {
-    const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
-    const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
-    return (
-      (parseFloat(item.quantity) || 0) *
-      calcV1 *
-      calcV2 *
-      (parseFloat(item.unitPrice) || 0)
-    );
+    const v1 = parseFloat(item.v1) || 0;
+    const v2 = parseFloat(item.v2) || 0;
+    const qty = parseFloat(item.quantity) || 0;
+    const price = parseFloat(item.unitPrice) || 0;
+
+    // If both v1 and v2 are 1, calculate as simple: qty * price
+    if (v1 === 1 && v2 === 1) {
+      return qty * price;
+    }
+
+    // Otherwise use the roundToNextMultipleOfThree formula
+    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+    return qty * calcV1 * calcV2 * price;
+  };
+
+  // Calculate Metre Lin for an item: (v1/100 + v2/100) * 2 * qty (using rounded values)
+  const calculateMetreLin = (item) => {
+    const v1 = parseFloat(item.v1) || 0;
+    const v2 = parseFloat(item.v2) || 0;
+    // Return 0 for simple calculations (v1=1 and v2=1)
+    if (v1 === 1 && v2 === 1) return 0;
+    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+    const qty = parseFloat(item.quantity) || 0;
+    return (calcV1 + calcV2) * 2 * qty;
+  };
+
+  // Calculate Surface for an item: qty * (v1/100) * (v2/100) using rounded values
+  const calculateSurface = (item) => {
+    const v1 = parseFloat(item.v1) || 0;
+    const v2 = parseFloat(item.v2) || 0;
+    // Return 0 for simple calculations (v1=1 and v2=1)
+    if (v1 === 1 && v2 === 1) return 0;
+    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+    const qty = parseFloat(item.quantity) || 0;
+    return qty * calcV1 * calcV2;
+  };
+
+  const isSimpleCalculation = (item) => {
+    const v1 = parseFloat(item.v1) || 1;
+    const v2 = parseFloat(item.v2) || 1;
+    return v1 === 1 && v2 === 1;
   };
 
   // Calculate all totals
   const subTotal = formData.items.reduce(
     (sum, item) => sum + calculateItemTotal(item),
+    0,
+  );
+
+  // Calculate sum of all Metre Lin
+  const totalMetreLin = formData.items.reduce(
+    (sum, item) => sum + calculateMetreLin(item),
+    0,
+  );
+
+  // Calculate sum of all Surface
+  const totalSurface = formData.items.reduce(
+    (sum, item) => sum + calculateSurface(item),
     0,
   );
 
@@ -706,6 +810,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         deliveryNumber: invoice.deliveryNumber,
         customerName: formData.customerName.trim(),
         customerPhone: formData.customerPhone.trim(),
+        clientId: selectedClientId || null,
         issueDate: formData.issueDate.toISOString(),
         notes: formData.notes,
         status: formData.status,
@@ -728,14 +833,16 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           remise_ligne: item.remise_ligne?.toString() || "0",
           designation: item.designation || item.articleName || null,
         })),
-        advancements: formData.advancements.map((adv) => ({
-          id: adv.id > 1000000000 ? undefined : adv.id, // Check if temp ID
-          amount: adv.amount,
-          paymentDate: adv.paymentDate.toISOString(),
-          paymentMethod: adv.paymentMethod,
-          reference: adv.reference,
-          notes: adv.notes,
-        })),
+        advancements: formData.advancements
+          .filter(adv => adv.amount > 0) // Only send advancements with amount > 0
+          .map((adv) => ({
+            id: typeof adv.id === 'number' && adv.id > 1000000000000 ? undefined : adv.id,
+            amount: parseFloat(adv.amount) || 0,
+            paymentDate: adv.paymentDate instanceof Date ? adv.paymentDate.toISOString() : new Date(adv.paymentDate).toISOString(),
+            paymentMethod: adv.paymentMethod || "espece",
+            reference: adv.reference || "",
+            notes: adv.notes || "",
+          })),
       };
 
       console.log("Sending update data to backend:", updateData);
@@ -750,7 +857,10 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       topTost("Bon Livraison mise à jour avec succès!", "success");
 
       if (onUpdate) {
-        onUpdate(response.data.bonLivraison || response.data);
+        onUpdate({
+          ...(response.data.bonLivraison || response.data),
+          total: totalAfterDiscount,
+        });
       }
 
       toggle();
@@ -914,9 +1024,15 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   <div class="invoice-info">
     <div class="info-block">
       <p><strong>Client:</strong> ${formData.customerName}</p>
-      <p><strong>Créer Par:</strong> ${User.email}</p>
+      <p><strong>Créer Par:</strong> ${User.name}</p>
     </div>
+        <div class="info-block" style="text-align:right;">
+      <p><strong>N° BL:</strong> ${invoice.deliveryNumber}</p>
+      <p><strong>Date Creation:</strong> ${creationDateFormatted}</p>
+    </div>
+
   </div>
+
 
   <table class="table">
     <thead>
@@ -933,45 +1049,34 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     </thead>
     <tbody>
       ${formData.items
-        .map(
-          (item) => `
+        .map((item) => {
+          const simple =
+            (parseFloat(item.v1) || 1) === 1 &&
+            (parseFloat(item.v2) || 1) === 1;
+          return `
         <tr>
           <td>${item.produit?.reference || item.code || "-"}</td>
           <td>${item.produit?.designation || "-"}</td>
           <td>${parseFloat(item.quantity).toFixed(2)}</td>
-          <td>${parseFloat(item.v1).toFixed(2)}</td>
-          <td>${parseFloat(item.v2).toFixed(2)}</td>
-          <td>${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td>${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td>${((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
+          <td>${(parseFloat(item.v1) || 1) === 1 ? "-" : parseFloat(item.v1).toFixed(2)}</td>
+          <td>${(parseFloat(item.v2) || 1) === 1 ? "-" : parseFloat(item.v2).toFixed(2)}</td>
+          <td>${simple ? "-" : ((roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100 + roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * 2 * (parseFloat(item.quantity) || 0)).toFixed(2)}</td>
+          <td>${simple ? "-" : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100)).toFixed(4)}</td>
+          <td>${simple ? ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2) : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
         </tr>
-      `,
-        )
+      `;
+        })
         .join("")}
     </tbody>
   </table>
 
   <div class="totals">
-    <p><strong>Sous-total:</strong> ${formatAmount(subTotal.toFixed(2))} Dh</p>
-    ${discount > 0 ? `<p><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
     <p><strong>Total:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
- 
+    <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+    <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
   </div>
 
   <div class="italic">${totalText}</div>
-
-  <div class="footer">
-    <p>
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p>
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-  </div>
 
   <script>
     window.onload = function () {
@@ -1117,44 +1222,36 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     </thead>
     <tbody>
       ${formData.items
-        .map(
-          (item) => `
+        .map((item) => {
+          const simple =
+            (parseFloat(item.v1) || 1) === 1 &&
+            (parseFloat(item.v2) || 1) === 1;
+          return `
         <tr>
           <td>${item.produit?.reference || item.code || "-"}</td>
           <td>${item.produit?.designation || "-"}</td>
           <td>${parseFloat(item.quantity).toFixed(2)}</td>
-          <td>${parseFloat(item.v1).toFixed(2)}</td>
-          <td>${parseFloat(item.v2).toFixed(2)}</td>
-          <td>${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-          <td>${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+          <td>${(parseFloat(item.v1) || 1) === 1 ? "-" : parseFloat(item.v1).toFixed(2)}</td>
+          <td>${(parseFloat(item.v2) || 1) === 1 ? "-" : parseFloat(item.v2).toFixed(2)}</td>
+          <td>${simple ? "-" : ((roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100 + roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * 2 * (parseFloat(item.quantity) || 0)).toFixed(2)}</td>
+          <td>${simple ? "-" : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100)).toFixed(4)}</td>
           <td>${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
-          <td>${((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
+          <td>${simple ? ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2) : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
         </tr>
-      `,
-        )
+      `;
+        })
         .join("")}
     </tbody>
   </table>
 
   <div class="totals">
-    <p><strong>Sous-total:</strong> ${formatAmount(subTotal.toFixed(2))} Dh</p>
-    ${discount > 0 ? `<p><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
     <p><strong>Net à payer:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
+    <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+    <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
   </div>
   <div class="italic">${totalText}</div>
 
-    <div class="footer">
-    <p>
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p>
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-  </div>
+
   <script>
     window.onload = function () {
       window.print();
@@ -1233,51 +1330,31 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         </thead>
         <tbody>
           ${formData.items
-            .map(
-              (item, i) => `
+            .map((item, i) => {
+              const simple =
+                (parseFloat(item.v1) || 1) === 1 &&
+                (parseFloat(item.v2) || 1) === 1;
+              return `
               <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
                 <td style="border:1px solid #ddd; padding:5px;">${item.produit?.reference || item.code || "-"}</td>
                 <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.quantity}</td>
                 <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.v1}</td>
                 <td style="border:1px solid #ddd; text-align:center; padding:5px;">${item.v2}</td>
-                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-                <td style="border:1px solid #ddd; text-align:right; padding:5px;">${(item.quantity || 0) * (item.unitPrice || 0)} Dh</td>
-              </tr>`,
-            )
+                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${simple ? "-" : ((roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100 + roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * 2 * (parseFloat(item.quantity) || 0)).toFixed(2)}</td>
+                <td style="border:1px solid #ddd; text-align:center; padding:5px;">${simple ? "-" : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100)).toFixed(4)}</td>
+                <td style="border:1px solid #ddd; text-align:right; padding:5px;">${simple ? ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2) : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
+              </tr>`;
+            })
             .join("")}
         </tbody>
       </table>
 
       <div style="text-align:right; margin-top:20px;">
-        <p style="margin:2px 0;"><strong>Sous-total:</strong> ${subTotal.toFixed(2)} Dh</p>
-        ${discount > 0 ? `<p style="margin:2px 0;"><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
         <p style="margin:2px 0;"><strong>Total après remise:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
-   
+        <p style="margin:2px 0;"><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+        <p style="margin:2px 0;"><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
       </div>
 
-      <div style="
-        position: absolute;
-        bottom: 10mm;
-        left: 20mm;
-        right: 20mm;
-        border-top: 2px solid #333;
-        padding-top: 8px;
-        text-align: center;
-        font-size: 9px;
-        color: #444;
-      ">
-        <p style="margin:3px 0;">
-          <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-          <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-        </p>
-        <p style="margin:3px 0;">
-          ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-          📱 06.09.68.52.11 &nbsp;|&nbsp;
-          Email: ibaghatrachid83@gmail.com
-        </p>
-        <p style="margin:3px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-      </div>
     `;
 
       document.body.appendChild(pdfContainer);
@@ -1371,33 +1448,32 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           </thead>
           <tbody>
             ${formData.items
-              .map(
-                (item) => `
+              .map((item) => {
+                const simple =
+                  (parseFloat(item.v1) || 1) === 1 &&
+                  (parseFloat(item.v2) || 1) === 1;
+                return `
               <tr>
                 <td style="border:1px solid #ddd; padding:6px;">${item.produit?.reference || item.code || "-"}</td>
                 <td style="border:1px solid #ddd; padding:6px;">${item.produit?.designation || "-"}</td>
                 <td style="border:1px solid #ddd; padding:6px; text-align:center;">${parseFloat(item.quantity).toFixed(2)}</td>
-                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${parseFloat(item.v1).toFixed(2)}</td>
-                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${parseFloat(item.v2).toFixed(2)}</td>
-                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.quantity) || 0) * (parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
-                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(((parseFloat(item.v1) || 0) * (parseFloat(item.v2) || 0)) / 10000).toFixed(4)}</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(parseFloat(item.v1) || 1) === 1 ? "-" : parseFloat(item.v1).toFixed(2)}</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${(parseFloat(item.v2) || 1) === 1 ? "-" : parseFloat(item.v2).toFixed(2)}</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${simple ? "-" : ((roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100 + roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * 2 * (parseFloat(item.quantity) || 0)).toFixed(2)}</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:center;">${simple ? "-" : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100)).toFixed(4)}</td>
                 <td style="border:1px solid #ddd; padding:6px; text-align:right;">${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
-                <td style="border:1px solid #ddd; padding:6px; text-align:right;">${((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
+                <td style="border:1px solid #ddd; padding:6px; text-align:right;">${simple ? ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2) : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
               </tr>
-            `,
-              )
+            `;
+              })
               .join("")}
           </tbody>
         </table>
 
         <div style="margin-top:20px; display:flex; flex-direction:column; align-items:flex-end;">
-          <p><strong>Sous-total:</strong> ${formatAmount(subTotal.toFixed(2))} Dh</p>
-          ${discount > 0 ? `<p><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
           <p><strong>Net à payer:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
-        </div>
-
-        <div style="position:fixed; bottom:0; left:0; right:0; border-top:1px solid #333; padding:8px 10mm; text-align:center; font-size:8px;">
-          <p>Signature et cachet: _________________________</p>
+          <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+          <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
         </div>
       `;
 
@@ -1459,6 +1535,33 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
 
       <ModalBody style={{ overflow: "visible" }}>
         <div className="row">
+          {/* Client Selection */}
+          <div className="col-md-12">
+            <div className="form-group mb-3">
+              <label className="form-label">Sélectionner un Client</label>
+              <Select
+                options={clients}
+                value={
+                  selectedClientId
+                    ? clients.find((c) => c.value == selectedClientId)
+                    : null
+                }
+                onChange={(option) => handleClientSelect(option?.value || "")}
+                placeholder="Choisissez un client..."
+                isClearable
+                isSearchable
+                isLoading={loadingClients}
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    backgroundColor: "#fff",
+                    borderColor: "#ddd",
+                  }),
+                }}
+              />
+            </div>
+          </div>
+
           {/* Customer Information */}
           <div className="col-md-6">
             <div className="form-group mb-3">
@@ -1832,53 +1935,77 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                       </td>
 
                       {/* Longueur (v1) - Input */}
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v1}
-                          onChange={(e) =>
-                            handleItemChange(index, "v1", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
+                      <td className="align-middle text-center">
+                        {parseFloat(item.v1) === 1 ? (
+                          <span className="text-primary fw-bold">-</span>
+                        ) : (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={item.v1}
+                            onChange={(e) =>
+                              handleItemChange(index, "v1", e.target.value)
+                            }
+                            min="0.01"
+                            step="0.01"
+                          />
+                        )}
                       </td>
 
                       {/* Largeur (v2) - Input */}
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v2}
-                          onChange={(e) =>
-                            handleItemChange(index, "v2", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
+                      <td className="align-middle text-center">
+                        {parseFloat(item.v2) === 1 ? (
+                          <span className="text-primary fw-bold">-</span>
+                        ) : (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={item.v2}
+                            onChange={(e) =>
+                              handleItemChange(index, "v2", e.target.value)
+                            }
+                            min="0.01"
+                            step="0.01"
+                          />
+                        )}
                       </td>
 
-                      {/* Mtre Lin. - Calculated */}
+                      {/* Mtre Lin. - Calculated: (v1/100 + v2/100) * 2 * qty */}
                       <td className="align-middle text-center">
                         <span className="text-primary fw-bold">
-                          {(
-                            ((parseFloat(item.quantity) || 0) *
-                              (parseFloat(item.v1) || 0) *
-                              (parseFloat(item.v2) || 0)) /
-                            10000
-                          ).toFixed(4)}
+                          {isSimpleCalculation(item)
+                            ? "-"
+                            : (
+                                (roundToNextMultipleOfThree(
+                                  parseFloat(item.v1) || 0,
+                                ) /
+                                  100 +
+                                  roundToNextMultipleOfThree(
+                                    parseFloat(item.v2) || 0,
+                                  ) /
+                                    100) *
+                                2 *
+                                (parseFloat(item.quantity) || 0)
+                              ).toFixed(2)}
                         </span>
                       </td>
 
-                      {/* Surface - Calculated */}
+                      {/* Surface - Calculated: qty * (v1/100) * (v2/100) */}
                       <td className="align-middle text-center">
                         <span className="text-info fw-bold">
-                          {(
-                            ((parseFloat(item.v1) || 0) *
-                              (parseFloat(item.v2) || 0)) /
-                            10000
-                          ).toFixed(4)}
+                          {isSimpleCalculation(item)
+                            ? "-"
+                            : (
+                                (parseFloat(item.quantity) || 0) *
+                                (roundToNextMultipleOfThree(
+                                  parseFloat(item.v1) || 0,
+                                ) /
+                                  100) *
+                                (roundToNextMultipleOfThree(
+                                  parseFloat(item.v2) || 0,
+                                ) /
+                                  100)
+                              ).toFixed(4)}
                         </span>
                       </td>
 
@@ -1973,6 +2100,14 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                   <div className="d-flex justify-content-between fw-bold border-top pt-1">
                     <span>Reste à payer:</span>
                     <span>{remainingAmount.toFixed(2)} Dh</span>
+                  </div>
+                  <div className="d-flex justify-content-between text-secondary mt-2 pt-2 border-top">
+                    <span>Total Mètre Lin:</span>
+                    <span>{totalMetreLin.toFixed(2)} ML</span>
+                  </div>
+                  <div className="d-flex justify-content-between text-secondary">
+                    <span>Total Surface:</span>
+                    <span>{totalSurface.toFixed(4)} m²</span>
                   </div>
                 </div>
               </div>

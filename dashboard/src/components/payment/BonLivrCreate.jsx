@@ -37,9 +37,9 @@ const previtems = [
 const roundToNextMultipleOfThree = (value) => {
   const numValue = parseFloat(value);
 
-  // Handle invalid values
-  if (isNaN(numValue) || numValue <= 0) {
-    return 1;
+  // Handle values less than or equal to 3 - return 3 (minimum) instead of the raw value
+  if (isNaN(numValue) || numValue < 3) {
+    return 3;
   }
 
   // If value is already a multiple of 3, return it as is
@@ -72,11 +72,22 @@ const getRoundedValue = (item, field) => {
   return item[field];
 };
 
-// Calculate total for an item - divide by 100 AND round to next multiple of 3
+// Calculate total for an item
 const calculateItemTotal = (item) => {
-  const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
-  return item.qty * calcV1 * calcV2 * item.price_unit;
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  const qty = parseFloat(item.qty) || 0;
+  const price = parseFloat(item.price_unit) || 0;
+  
+  // If both v1 and v2 are 1, calculate as simple: qty * price
+  if (v1 === 1 && v2 === 1) {
+    return qty * price;
+  }
+  
+  // Otherwise use the roundToNextMultipleOfThree formula
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  return qty * calcV1 * calcV2 * price;
 };
 
 // Moroccan invoice status options

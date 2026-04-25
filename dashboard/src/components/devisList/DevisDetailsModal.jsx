@@ -25,6 +25,7 @@ import html2canvas from "html2canvas";
 import Swal from "sweetalert2";
 import withReactContent from "sweetalert2-react-content";
 import AsyncSelect from "react-select/async";
+import Select from "react-select";
 import { components } from "react-select";
 
 const MySwal = withReactContent(Swal);
@@ -35,6 +36,30 @@ const roundToNextMultipleOfThree = (value) => {
   if (isNaN(numValue) || numValue <= 0) return 1;
   if (numValue % 3 === 0) return numValue;
   return Math.ceil(numValue / 3) * 3;
+};
+
+// Calculate Metre Lin for an item (only for non-simple items)
+const calculateMetreLin = (item) => {
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  // Return 0 for simple calculations (v1=1 and v2=1)
+  if (v1 === 1 && v2 === 1) return 0;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const qty = parseFloat(item.quantity) || 0;
+  return (calcV1 + calcV2) * 2 * qty;
+};
+
+// Calculate Surface for an item (only for non-simple items)
+const calculateSurface = (item) => {
+  const v1 = parseFloat(item.v1) || 0;
+  const v2 = parseFloat(item.v2) || 0;
+  // Return 0 for simple calculations (v1=1 and v2=1)
+  if (v1 === 1 && v2 === 1) return 0;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const qty = parseFloat(item.quantity) || 0;
+  return qty * calcV1 * calcV2;
 };
 
 // Custom ClearIndicator for react-select
@@ -109,6 +134,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
   const [statusKey, setStatusKey] = useState(0); // Force re-render of status select
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [loadingClients, setLoadingClients] = useState(true);
   const statusRef = useRef(devis?.status || "brouillon"); // Store original status
   const [formData, setFormData] = useState({
     customerName: "",
@@ -153,6 +181,45 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     };
     fetchProducts();
   }, []);
+
+  // Fetch clients
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoadingClients(true);
+      try {
+        const response = await axios.get(`${config_url}/api/clients`);
+        const clientOptions = (response.data?.clients || []).map((client) => {
+          const refPart = client.reference ? `(${client.reference}) ` : "";
+          return {
+            value: client.id,
+            label: `${refPart}${client.nom_complete}${client.telephone ? ` - ${client.telephone}` : ""}`,
+            searchText: [
+              client.nom_complete?.toLowerCase() || "",
+              client.telephone?.toLowerCase() || "",
+              client.reference?.toLowerCase() || "",
+            ].join(" "),
+            ...client,
+          };
+        });
+        setClients(clientOptions);
+      } catch (error) {
+        console.error("Error fetching clients:", error);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    fetchClients();
+  }, []);
+
+  // Handle client selection
+  const handleClientSelect = (clientId) => {
+    setSelectedClientId(clientId);
+    const selectedClient = clients.find((c) => c.value == clientId);
+    if (selectedClient) {
+      handleInputChange("customerName", selectedClient.nom_complete || "");
+      handleInputChange("customerPhone", selectedClient.telephone || "");
+    }
+  };
 
   // Load products for async select
   const loadProduits = async (inputValue) => {
@@ -204,6 +271,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         prix_unitaire: 0,
         total_ligne: calculateItemTotal({
           ...updatedLignes[index],
+          quantity: updatedLignes[index].quantity,
           prix_unitaire: 0,
         }),
       };
@@ -218,6 +286,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         prix_unitaire: parseFloat(produit.prix_vente) || 0,
         total_ligne: calculateItemTotal({
           ...updatedLignes[index],
+          quantity: updatedLignes[index].quantity,
           prix_unitaire: parseFloat(produit.prix_vente) || 0,
         }),
       };
@@ -242,13 +311,13 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
             reference: ligne.produit?.reference || "",
             // Use articleName from ligne (or fallback to produit designation)
             articleName: ligne.articleName || ligne.produit?.designation || "",
-            quantite: parseFloat(ligne.quantite) || 1,
+            quantity: parseFloat(ligne.quantite) || 1,
             v1: parseFloat(ligne.v1) || 1,
             v2: parseFloat(ligne.v2) || 1,
             v3: 1,
             prix_unitaire: parseFloat(ligne.prix_unitaire) || 0,
             total_ligne: calculateItemTotal({
-              quantite: parseFloat(ligne.quantite) || 1,
+              quantity: parseFloat(ligne.quantite) || 1,
               v1: parseFloat(ligne.v1) || 1,
               v2: parseFloat(ligne.v2) || 1,
               prix_unitaire: parseFloat(ligne.prix_unitaire) || 0,
@@ -300,14 +369,37 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
   };
 
   const calculateItemTotal = (ligne) => {
-    const calcV1 = roundToNextMultipleOfThree(parseFloat(ligne.v1) || 0) / 100;
-    const calcV2 = roundToNextMultipleOfThree(parseFloat(ligne.v2) || 0) / 100;
-    return (parseFloat(ligne.quantite) || 0) * calcV1 * calcV2 * (parseFloat(ligne.prix_unitaire) || 0);
+    const v1 = parseFloat(ligne.v1) || 0;
+    const v2 = parseFloat(ligne.v2) || 0;
+    const qty = parseFloat(ligne.quantity) || 0;
+    const price = parseFloat(ligne.prix_unitaire) || 0;
+
+    // If both v1 and v2 are 1, calculate as simple: qty * price
+    if (v1 === 1 && v2 === 1) {
+      return qty * price;
+    }
+
+    // Otherwise use the roundToNextMultipleOfThree formula
+    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+    return qty * calcV1 * calcV2 * price;
   };
 
   // Calculate all totals
   const subTotal = formData.lignes.reduce(
     (sum, ligne) => sum + calculateItemTotal(ligne),
+    0,
+  );
+
+  // Calculate sum of all Metre Lin (excluding simple items)
+  const totalMetreLin = formData.lignes.reduce(
+    (sum, ligne) => sum + calculateMetreLin(ligne),
+    0,
+  );
+
+  // Calculate sum of all Surface (excluding simple items)
+  const totalSurface = formData.lignes.reduce(
+    (sum, ligne) => sum + calculateSurface(ligne),
     0,
   );
 
@@ -322,6 +414,12 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
   const discount = calculateDiscount();
   const total = Math.max(0, subTotal - discount);
 
+  const isSimpleCalculation = (ligne) => {
+    const v1 = parseFloat(ligne.v1) || 1;
+    const v2 = parseFloat(ligne.v2) || 1;
+    return v1 === 1 && v2 === 1;
+  };
+
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({
       ...prev,
@@ -335,7 +433,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       id: `temp-${Date.now()}`,
       reference: "",
       articleName: "",
-      quantite: 1,
+      quantity: 1,
       v1: 1,
       v2: 1,
       v3: 1,
@@ -384,7 +482,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     };
 
     // Recalculate total price when dimensions change
-    if (["quantite", "v1", "v2", "prix_unitaire"].includes(field)) {
+    if (["quantity", "v1", "v2", "prix_unitaire"].includes(field)) {
       updatedLignes[index].total_ligne = calculateItemTotal(
         updatedLignes[index],
       );
@@ -417,7 +515,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         topTost("Tous les articles doivent avoir un nom", "error");
         return;
       }
-      if (ligne.quantite <= 0 || ligne.prix_unitaire < 0) {
+      if (ligne.quantity <= 0 || ligne.prix_unitaire < 0) {
         topTost("Quantité doit être positive et prix unitaire valide", "error");
         return;
       }
@@ -444,7 +542,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         lignes: formData.lignes.map((ligne) => ({
           id: ligne.id?.toString().startsWith("temp-") ? undefined : ligne.id,
           articleName: ligne.articleName.trim(),
-          quantite: ligne.quantite.toString(),
+          quantite: ligne.quantity.toString(),
           v1: ligne.v1.toString(),
           v2: ligne.v2.toString(),
           prix_unitaire: ligne.prix_unitaire.toString(),
@@ -465,7 +563,14 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       topTost("Devis mis à jour avec succès!", "success");
 
       if (onUpdate) {
-        onUpdate(response.data);
+        onUpdate({
+          id: devis.id,
+          ...response.data,
+          total: parseFloat(total).toFixed(2),
+          customerName: formData.customerName,
+          customerPhone: formData.customerPhone,
+          status: formData.status,
+        });
       }
 
       toggle();
@@ -743,21 +848,30 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
 </thead>
 <tbody>
   ${formData.lignes
-    .map(
-      (ligne) => `
+    .map((ligne) => {
+      const v1 = parseFloat(ligne.v1) || 1;
+      const v2 = parseFloat(ligne.v2) || 1;
+      const isSimpleCalc = v1 === 1 && v2 === 1;
+      const qty = parseFloat(ligne.quantity) || 0;
+
+      // Calculate metre lin and surface with rounded values
+      const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+      const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+
+      return `
     <tr>
       <td>${ligne.reference || ligne.produit?.reference || "—"}</td>
       <td>${ligne.articleName}</td>
-      <td>${parseFloat(ligne.quantite).toFixed(2)}</td>
-      <td>${parseFloat(ligne.v1).toFixed(2)}</td>
-      <td>${parseFloat(ligne.v2).toFixed(2)}</td>
-      <td>${(((parseFloat(ligne.quantite) || 0) * (parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
-      <td>${(((parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
+      <td>${parseFloat(ligne.quantity).toFixed(2)}</td>
+      <td>${(parseFloat(ligne.v1) || 1) === 1 ? "-" : parseFloat(ligne.v1).toFixed(2)}</td>
+      <td>${(parseFloat(ligne.v2) || 1) === 1 ? "-" : parseFloat(ligne.v2).toFixed(2)}</td>
+      <td>${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+      <td>${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
       <td>${parseFloat(ligne.prix_unitaire).toFixed(2)} Dh</td>
       <td>${parseFloat(ligne.total_ligne).toFixed(2)} Dh</td>
     </tr>
-  `,
-    )
+  `;
+    })
     .join("")}
 </tbody>
   </table>
@@ -766,6 +880,8 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     <p><strong>Sous-total:</strong> ${subTotal.toFixed(2)} Dh</p>
     ${discount > 0 ? `<p><strong>Remise:</strong> -${discount.toFixed(2)} Dh</p>` : ""}
     <p><strong>Total:</strong> ${total.toFixed(2)} Dh</p>
+    <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+    <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
   </div>
 
   <div class="footer">
@@ -866,20 +982,29 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
 </thead>
 <tbody>
   ${formData.lignes
-    .map(
-      (ligne, i) => `
+    .map((ligne, i) => {
+      const v1 = parseFloat(ligne.v1) || 1;
+      const v2 = parseFloat(ligne.v2) || 1;
+      const isSimpleCalc = v1 === 1 && v2 === 1;
+      const qty = parseFloat(ligne.quantity) || 0;
+
+      // Calculate metre lin and surface with rounded values
+      const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+      const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+
+      return `
       <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">
         <td style="border:1px solid #ddd; padding:5px;">${ligne.reference || ligne.produit?.reference || "—"}</td>
         <td style="border:1px solid #ddd; padding:5px;">${ligne.articleName}</td>
-        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${ligne.quantite}</td>
-        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${ligne.v1}</td>
-        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${ligne.v2}</td>
-        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(ligne.quantite) || 0) * (parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
-        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(((parseFloat(ligne.v1) || 0) * (parseFloat(ligne.v2) || 0)) / 10000).toFixed(4)}</td>
+        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${ligne.quantity}</td>
+        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(parseFloat(ligne.v1) || 1) === 1 ? "-" : ligne.v1}</td>
+        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${(parseFloat(ligne.v2) || 1) === 1 ? "-" : ligne.v2}</td>
+        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
+        <td style="border:1px solid #ddd; text-align:center; padding:5px;">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
         <td style="border:1px solid #ddd; text-align:right; padding:5px;">${ligne.prix_unitaire.toFixed(2)} Dh</td>
         <td style="border:1px solid #ddd; text-align:right; padding:5px;">${ligne.total_ligne.toFixed(2)} Dh</td>
-      </tr>`,
-    )
+      </tr>`;
+    })
     .join("")}
 </tbody>
       </table>
@@ -890,6 +1015,8 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
         <p style="font-size:13px; font-weight:bold; color:#2c5aa0; border-top:2px solid #2c5aa0; padding-top:5px;">
           Total: ${total.toFixed(2)} Dh
         </p>
+        <p style="margin:2px 0; margin-top:8px;"><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+        <p style="margin:2px 0;"><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
       </div>
 
      <div style="
@@ -974,6 +1101,33 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
 
       <ModalBody style={{ overflow: "visible" }}>
         <div className="row">
+          {/* Client Selection */}
+          <div className="col-md-12">
+            <div className="form-group mb-3">
+              <label className="form-label">Sélectionner un Client</label>
+              <Select
+                options={clients}
+                value={
+                  selectedClientId
+                    ? clients.find((c) => c.value == selectedClientId)
+                    : null
+                }
+                onChange={(option) => handleClientSelect(option?.value || "")}
+                placeholder="Choisissez un client..."
+                isClearable
+                isSearchable
+                isLoading={loadingClients}
+                styles={{
+                  control: (base) => ({
+                    ...base,
+                    backgroundColor: "#fff",
+                    borderColor: "#ddd",
+                  }),
+                }}
+              />
+            </div>
+          </div>
+
           {/* Customer Information */}
           <div className="col-md-6">
             <div className="form-group mb-3">
@@ -1221,9 +1375,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
                         <input
                           type="number"
                           className="form-control form-control-sm"
-                          value={ligne.quantite}
+                          value={ligne.quantity}
                           onChange={(e) =>
-                            handleLigneChange(index, "quantite", e.target.value)
+                            handleLigneChange(index, "quantity", e.target.value)
                           }
                           min="1"
                           step="1"
@@ -1232,30 +1386,38 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
 
                       {/* Longueur (v1) - Input */}
                       <td>
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={ligne.v1}
-                          onChange={(e) =>
-                            handleLigneChange(index, "v1", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
+                        {parseFloat(ligne.v1) === 1 ? (
+                          <span className="text-primary fw-bold">-</span>
+                        ) : (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={ligne.v1}
+                            onChange={(e) =>
+                              handleLigneChange(index, "v1", e.target.value)
+                            }
+                            min="0.01"
+                            step="0.01"
+                          />
+                        )}
                       </td>
 
                       {/* Largeur (v2) - Input */}
                       <td>
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={ligne.v2}
-                          onChange={(e) =>
-                            handleLigneChange(index, "v2", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
+                        {parseFloat(ligne.v2) === 1 ? (
+                          <span className="text-primary fw-bold">-</span>
+                        ) : (
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            value={ligne.v2}
+                            onChange={(e) =>
+                              handleLigneChange(index, "v2", e.target.value)
+                            }
+                            min="0.01"
+                            step="0.01"
+                          />
+                        )}
                       </td>
 
                       {/* prix/Unité - Input */}
@@ -1339,6 +1501,14 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
                   <div className="d-flex justify-content-between fw-bold border-top pt-1">
                     <span>Total:</span>
                     <span>{total.toFixed(2)} Dh</span>
+                  </div>
+                  <div className="d-flex justify-content-between text-secondary mt-2 pt-2 border-top">
+                    <span>Total Mètre Lin:</span>
+                    <span>{totalMetreLin.toFixed(2)} ML</span>
+                  </div>
+                  <div className="d-flex justify-content-between text-secondary">
+                    <span>Total Surface:</span>
+                    <span>{totalSurface.toFixed(4)} m²</span>
                   </div>
                 </div>
               </div>
