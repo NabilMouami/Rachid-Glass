@@ -44,8 +44,8 @@ const calculateMetreLin = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const calcV1 = v1 / 100;
+  const calcV2 = v2 / 100;
   const qty = parseFloat(item.quantity) || 0;
   return (calcV1 + calcV2) * 2 * qty;
 };
@@ -56,8 +56,8 @@ const calculateSurface = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const calcV1 = v1 / 100;
+  const calcV2 = v2 / 100;
   const qty = parseFloat(item.quantity) || 0;
   return qty * calcV1 * calcV2;
 };
@@ -379,9 +379,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       return qty * price;
     }
 
-    // Otherwise use the roundToNextMultipleOfThree formula
-    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+    // Otherwise use the exact values
+    const calcV1 = v1 / 100;
+    const calcV2 = v2 / 100;
     return qty * calcV1 * calcV2 * price;
   };
 
@@ -778,18 +778,7 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     .notes {
       margin-top: 20px;
     }
- .footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  border-top: 1px solid #333;
-  padding-top: 10px;
-  text-align: center;
-  font-size: 9px;
-  color: #444;
-  background: white;
-}
+
     @page {
       margin: 0;
       size: A4;
@@ -854,9 +843,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       const isSimpleCalc = v1 === 1 && v2 === 1;
       const qty = parseFloat(ligne.quantity) || 0;
 
-      // Calculate metre lin and surface with rounded values
-      const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-      const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+      // Calculate metre lin and surface with exact values
+      const calcV1 = v1 / 100;
+      const calcV2 = v2 / 100;
 
       return `
     <tr>
@@ -882,20 +871,6 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
     <p><strong>Total:</strong> ${total.toFixed(2)} Dh</p>
     <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
     <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
-  </div>
-
-  <div class="footer">
-    <p>
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p>
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-   
   </div>
 
 </body>
@@ -988,9 +963,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       const isSimpleCalc = v1 === 1 && v2 === 1;
       const qty = parseFloat(ligne.quantity) || 0;
 
-      // Calculate metre lin and surface with rounded values
-      const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-      const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+      // Calculate metre lin and surface with exact values
+      const calcV1 = v1 / 100;
+      const calcV2 = v2 / 100;
 
       return `
       <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">

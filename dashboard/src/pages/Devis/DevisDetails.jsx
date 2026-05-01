@@ -55,9 +55,9 @@ const calculateItemTotalPrice = (v1, v2, qty, price) => {
     return numQty * numPrice;
   }
 
-  // Otherwise use the roundToNextMultipleOfThree formula
-  const calcV1 = roundToNextMultipleOfThree(numV1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(numV2) / 100;
+  // Otherwise use exact values
+  const calcV1 = numV1 / 100;
+  const calcV2 = numV2 / 100;
   return numQty * calcV1 * calcV2 * numPrice;
 };
 
@@ -67,8 +67,8 @@ const calculateMetreLin = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const calcV1 = v1 / 100;
+  const calcV2 = v2 / 100;
   const qty = parseFloat(item.quantity) || 0;
   return (calcV1 + calcV2) * 2 * qty;
 };
@@ -79,8 +79,8 @@ const calculateSurface = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const calcV1 = v1 / 100;
+  const calcV2 = v2 / 100;
   const qty = parseFloat(item.quantity) || 0;
   return qty * calcV1 * calcV2;
 };
@@ -857,9 +857,9 @@ const DevisDetailsPage = () => {
           const isSimpleCalc = v1 === 1 && v2 === 1;
           const qty = parseFloat(item.quantity) || 0;
 
-          // Calculate metre lin and surface with rounded values
-          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+          // Calculate metre lin and surface with exact values
+          const calcV1 = v1 / 100;
+          const calcV2 = v2 / 100;
 
           return `
         <tr>
@@ -893,20 +893,6 @@ const DevisDetailsPage = () => {
   </div>
 
   ${formData.notes ? `<div class="validity">Notes: ${formData.notes}</div>` : ""}
-
-  <div class="footer">
-    <p style="margin:2px 0;">
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p style="margin:2px 0;">
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-    <p style="margin-top:6px;">Signature et cachet: _________________________</p>
-  </div>
 
   <script>
     window.onload = function() {
@@ -992,9 +978,9 @@ const DevisDetailsPage = () => {
                 const isSimpleCalc = v1 === 1 && v2 === 1;
                 const qty = parseFloat(item.quantity) || 0;
 
-                // Calculate metre lin and surface with rounded values
-                const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-                const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+                // Calculate metre lin and surface with exact values
+                const calcV1 = v1 / 100;
+                const calcV2 = v2 / 100;
 
                 return `
                 <tr style="${index % 2 === 0 ? "background:#f9f9f9;" : ""}">

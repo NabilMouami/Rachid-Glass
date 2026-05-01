@@ -64,8 +64,6 @@ const buildInvoiceHTML = ({
       (item, i) => `
       <tr class="${i % 2 === 0 ? "row-even" : "row-odd"}">
         <td class="td-center">${parseFloat(item.quantity || 0).toFixed(2)}</td>
-        <td class="td-center">${parseFloat(item.v1 || 1).toFixed(2)}</td>
-        <td class="td-center">${parseFloat(item.v2 || 1).toFixed(2)}</td>
         <td>${item.produit?.designation || item.designation || "-"}</td>
         <td class="td-right">${parseFloat(item.unitPrice || 0).toFixed(2)}</td>
         ${item.remise_ligne > 0 ? `<td class="td-right">${parseFloat(item.remise_ligne).toFixed(2)}</td>` : `<td class="td-center td-muted">—</td>`}
@@ -429,7 +427,6 @@ const buildInvoiceHTML = ({
     <div class="info-card highlight">
       <div class="info-card-title">Client</div>
       <p><strong>${formData.customerName || "—"}</strong></p>
-      ${formData.customerPhone ? `<p>Tél : ${formData.customerPhone}</p>` : ""}
       ${formData.ice ? `<p>ICE : ${formData.ice}</p>` : ""}
       ${formData.ste ? `<p>Ste : ${formData.ste}</p>` : ""}
     </div>
@@ -450,8 +447,6 @@ const buildInvoiceHTML = ({
     <thead>
       <tr>
         <th class="th-center" style="width:60px">Qté</th>
-        <th class="th-center" style="width:55px">Long.</th>
-        <th class="th-center" style="width:55px">Larg.</th>
         <th>Désignation</th>
         <th class="th-right" style="width:70px">Prix U. (Dh)</th>
         <th class="th-right" style="width:65px">Remise</th>
@@ -466,10 +461,7 @@ const buildInvoiceHTML = ({
   <!-- ═══ TOTALS ═══ -->
   <div class="totals-wrapper">
     <div class="totals-box">
-      <div class="totals-row">
-        <span class="lbl">Sous-total HT</span>
-        <span class="val">${subTotal.toFixed(2)} Dh</span>
-      </div>
+   
       ${
         discount > 0
           ? `<div class="totals-row" style="color:#c0392b;">
@@ -642,8 +634,124 @@ const tvaOptions = [
   { value: 20, label: "20% (Taux standard)" },
 ];
 
+// Total to French text function
+const totalToFrenchText = (amount) => {
+  if (amount === 0) return "Zéro dirham";
+
+  const units = [
+    "",
+    "un",
+    "deux",
+    "trois",
+    "quatre",
+    "cinq",
+    "six",
+    "sept",
+    "huit",
+    "neuf",
+  ];
+  const teens = [
+    "dix",
+    "onze",
+    "douze",
+    "treize",
+    "quatorze",
+    "quinze",
+    "seize",
+    "dix-sept",
+    "dix-huit",
+    "dix-neuf",
+  ];
+  const tens = [
+    "",
+    "",
+    "vingt",
+    "trente",
+    "quarante",
+    "cinquante",
+    "soixante",
+    "soixante",
+    "quatre-vingt",
+    "quatre-vingt",
+  ];
+
+  const convertLessThanOneThousand = (num) => {
+    if (num === 0) return "";
+    let result = "";
+
+    if (num >= 100) {
+      const h = Math.floor(num / 100);
+      result += h === 1 ? "cent" : units[h] + " cent";
+      num %= 100;
+      if (num === 0 && h > 1) result += "s";
+      if (num > 0) result += " ";
+    }
+
+    if (num < 10) result += units[num];
+    else if (num < 20) result += teens[num - 10];
+    else {
+      const t = Math.floor(num / 10);
+      const u = num % 10;
+      if (t === 7) {
+        result += "soixante" + (u === 1 ? " et onze" : "-" + teens[u]);
+      } else if (t === 9) {
+        result += "quatre-vingt" + "-" + teens[u];
+      } else {
+        result += tens[t];
+        if (u === 1 && t !== 8) result += " et un";
+        else if (u > 0) result += "-" + units[u];
+        if (t === 8 && u === 0) result += "s";
+      }
+    }
+    return result;
+  };
+
+  const convertNumberToWords = (num) => {
+    if (num === 0) return "zéro";
+    let result = "";
+
+    if (num >= 1000000000) {
+      const b = Math.floor(num / 1000000000);
+      result +=
+        convertLessThanOneThousand(b) + " milliard" + (b > 1 ? "s" : "") + " ";
+      num %= 1000000000;
+    }
+    if (num >= 1000000) {
+      const m = Math.floor(num / 1000000);
+      result +=
+        convertLessThanOneThousand(m) + " million" + (m > 1 ? "s" : "") + " ";
+      num %= 1000000;
+    }
+    if (num >= 1000) {
+      const t = Math.floor(num / 1000);
+      result +=
+        (t === 1 ? "mille" : convertLessThanOneThousand(t) + " mille") + " ";
+      num %= 1000;
+    }
+    if (num > 0) result += convertLessThanOneThousand(num);
+
+    return result.trim();
+  };
+
+  const dirhams = Math.floor(amount);
+  const centimes = Math.round((amount - dirhams) * 100);
+
+  let text =
+    convertNumberToWords(dirhams) + " dirham" + (dirhams > 1 ? "s" : "");
+  if (centimes > 0) {
+    text +=
+      " et " +
+      convertNumberToWords(centimes) +
+      " centime" +
+      (centimes > 1 ? "s" : "");
+  }
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
 const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
   const [loadingProduits, setLoadingProduits] = useState(true);
   const [products, setProducts] = useState([]);
   const [clients, setClients] = useState([]);
@@ -1141,6 +1249,207 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   };
 
   // ─── PRINT ────────────────────────────────────────────────────────────────
+  const buildPrintHTML = ({ autoPrint = false } = {}) => {
+    const creationDateFormatted = new Date(formData.issueDate).toLocaleString(
+      "fr-FR",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    );
+
+    const formatAmount = (value) =>
+      Number(value || 0).toLocaleString("fr-FR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Facture ${invoice.invoiceNumber}</title>
+  <meta charset="UTF-8" />
+  <style>
+    @page { size: A4; margin: 10mm; }
+
+    * {
+      box-sizing: border-box;
+      text-transform: uppercase;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 0.65rem;
+      color: #000;
+      margin: 0;
+      padding: 10mm;
+      padding-bottom: 70px;
+      background: #fff;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 1px;
+    }
+
+
+    .info {
+    margin-top: 120px;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      border: 1.5px solid #000;
+      padding: 6px;
+    }
+
+    th {
+      background: #f2f2f2;
+      text-align: center;
+    }
+
+    .text-center { text-align: center; }
+    .text-end { text-align: right; }
+
+    .totals {
+      margin-top: 25px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
+    }
+
+    .net-box {
+      display: flex;
+      gap: 15px;
+      font-weight: bold;
+    }
+
+    .net-box span {
+      border: 2px solid #000;
+      padding: 10px 18px;
+      font-size: 0.7rem;
+    }
+
+    .italic {
+      font-style: italic;
+      font-weight: bold;
+      font-size: 0.7rem;
+      text-align: right;
+    }
+
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      border-top: 2px solid #000;
+      padding: 8px 10mm;
+      text-align: center;
+      font-size: 8px;
+      color: #444;
+      background: white;
+      text-transform: uppercase;
+    }
+
+    @media print {
+      .no-print { display: none; }
+    }
+  </style>
+</head>
+
+<body>
+
+
+
+  <div class="info">
+    <div>
+      <strong>Client :</strong><br/>
+      ${formData.customerName}<br/>
+    </div>
+     <div style="text-align:right;">
+      <strong>N° Facture :</strong> ${invoice.invoiceNumber}<br/>
+      <strong>Date création :</strong> ${creationDateFormatted}
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Désignation</th>
+        <th>Qté</th>
+        <th>Prix U</th>
+        <th>Total HT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${formData.items
+        .map(
+          (item) => `
+        <tr>
+          <td>${item.code || "—"}</td>
+          <td>${item.designation || "—"}</td>
+          <td class="text-center">${item.quantity}</td>
+          <td class="text-end">${formatAmount(item.unitPrice)}</td>
+          <td class="text-end">${formatAmount(item.totalPrice)}</td>
+        </tr>
+      `,
+        )
+        .join("")}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
+    <div>Total HT : ${formatAmount(totalHT)} DH</div>
+    <div>TVA (${formData.tvaRate || 20}%) :</div>
+    <div class="net-box">
+      <span>Net TTC à payer</span>
+      <span>${formatAmount(totalTTC)} DH</span>
+    </div>
+    ${
+      totalAdvancement > 0
+        ? `
+      <div>Avancements : -${formatAmount(totalAdvancement)} DH</div>
+      <div>Reste à payer : ${formatAmount(remainingAmount)} DH</div>
+    `
+        : ""
+    }
+    <div class="italic">
+      ${totalToFrenchText(totalTTC)}
+    </div>
+  </div>
+
+  ${
+    autoPrint
+      ? `<script>
+    window.onload = function () {
+      window.print();
+      setTimeout(() => window.close(), 100);
+    };
+  </script>`
+      : ""
+  }
+
+</body>
+</html>
+`;
+  };
+
   const handlePrint = () => {
     if (!invoice) return;
     const printWindow = window.open("", "_blank");
@@ -1148,21 +1457,98 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       alert("Veuillez autoriser les popups pour imprimer");
       return;
     }
-    let html = buildInvoiceHTML(templateParams);
-    // Inject auto-print script before </body>
-    html = html.replace(
-      "</body>",
-      `<script>window.onload = function(){ window.print(); };<\/script></body>`,
-    );
+    const content = buildPrintHTML({ autoPrint: true });
+
     printWindow.document.open();
-    printWindow.document.write(html);
+    printWindow.document.write(content);
     printWindow.document.close();
+  };
+
+  const generatePrintDesignPdfBlob = async () => {
+    const html = buildPrintHTML({ autoPrint: false });
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.left = "-9999px";
+    iframe.style.top = "0";
+    iframe.style.width = "794px";
+    iframe.style.height = "1123px";
+    iframe.style.border = "none";
+    document.body.appendChild(iframe);
+
+    await new Promise((resolve) => {
+      iframe.onload = resolve;
+      iframe.srcdoc = html;
+    });
+
+    await new Promise((r) => setTimeout(r, 400));
+
+    const canvas = await html2canvas(iframe.contentDocument.body, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      width: 794,
+      height: 1123,
+      windowWidth: 794,
+      windowHeight: 1123,
+    });
+
+    document.body.removeChild(iframe);
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const imgHeightMm = (canvas.height * pageWidth) / canvas.width;
+
+    if (imgHeightMm <= pageHeight) {
+      pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeightMm);
+    } else {
+      let heightLeft = imgHeightMm;
+      let position = 0;
+      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeightMm);
+      heightLeft -= pageHeight;
+      while (heightLeft > 1) {
+        position = heightLeft - imgHeightMm;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeightMm);
+        heightLeft -= pageHeight;
+      }
+    }
+
+    return pdf.output("blob");
+  };
+
+  const handleUploadInvoicePdf = async () => {
+    if (!invoice?.id) return;
+    setIsUploadingPdf(true);
+    try {
+      const blob = await generatePrintDesignPdfBlob();
+      const filename = `Facture-${invoice.invoiceNumber}.pdf`;
+
+      const fd = new FormData();
+      fd.append("pdf", blob, filename);
+
+      await axios.post(`${config_url}/api/factures/${invoice.id}/pdf`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      topTost("PDF uploadé avec succès!", "success");
+    } catch (err) {
+      console.error("Erreur upload PDF:", err);
+      const msg =
+        err.response?.data?.message || "Erreur lors de l'upload du PDF";
+      topTost(msg, "error");
+    } finally {
+      setIsUploadingPdf(false);
+    }
   };
 
   // ─── PDF DOWNLOAD ─────────────────────────────────────────────────────────
   const generateAndDownloadPDF = async () => {
     try {
-      const html = buildInvoiceHTML(templateParams);
+      const html = buildPrintHTML({ autoPrint: false });
 
       // Create hidden iframe to render the HTML
       const iframe = document.createElement("iframe");
@@ -1777,10 +2163,7 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
                 </div>
                 <div className="col-md-6 text-end">
                   <h6>Montants</h6>
-                  <div className="d-flex justify-content-between">
-                    <span>Sous-total HT:</span>
-                    <span>{subTotal.toFixed(2)} Dh</span>
-                  </div>
+
                   {discount > 0 && (
                     <div className="d-flex justify-content-between text-danger">
                       <span>Remise:</span>
@@ -1833,6 +2216,14 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         >
           <FiDownload className="me-2" />
           Télécharger PDF
+        </button>
+        <button
+          className="btn btn-outline-success"
+          onClick={handleUploadInvoicePdf}
+          disabled={isUploadingPdf}
+        >
+          <FiSave className="me-2" />
+          {isUploadingPdf ? "Upload..." : "Uploader PDF"}
         </button>
         <Button onClick={handlePrint} color="outline-primary">
           <FiPrinter className="me-2" />

@@ -650,14 +650,10 @@ const FactureDetailsPage = () => {
     setFormData((prev) => ({ ...prev, advancements: updatedAdvancements }));
   };
 
-  // Print function
-  const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
+  const buildPrintHTML = ({ autoPrint = false } = {}) => {
     const creationDateFormatted = formatDateWithTime(formData.issueDate);
 
-    const content = `
+    return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -687,16 +683,9 @@ const FactureDetailsPage = () => {
       letter-spacing: 1px;
     }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 2px solid #000;
-      padding-bottom: 10px;
-      margin-bottom: 20px;
-    }
 
     .info {
+    margin-top: 120px;
       display: flex;
       justify-content: space-between;
       margin-bottom: 20px;
@@ -770,27 +759,16 @@ const FactureDetailsPage = () => {
 
 <body>
 
-  <div class="header">
-    <div>
-      <h2>FACTURE</h2>
-      <div style="font-weight:bold; margin-top:4px;">STE. RACHIGLASS S.A.R.L. A.U</div>
-      <div>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-      <div>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</div>
-      <div>Email: ibaghatrachid83@gmail.com</div>
-      <div>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
-      <div>ICE: 003013206000054</div>
-    </div>
-    <div style="text-align:right;">
-      <strong>N° Facture :</strong> ${facture.invoiceNumber}<br/>
-      <strong>Date création :</strong> ${creationDateFormatted}
-    </div>
-  </div>
+
 
   <div class="info">
     <div>
       <strong>Client :</strong><br/>
       ${formData.customerName}<br/>
-      ${formData.customerPhone ? `Tél: ${formData.customerPhone}` : ""}
+    </div>
+     <div style="text-align:right;">
+      <strong>N° Facture :</strong> ${facture.invoiceNumber}<br/>
+      <strong>Date création :</strong> ${creationDateFormatted}
     </div>
   </div>
 
@@ -800,8 +778,6 @@ const FactureDetailsPage = () => {
         <th>Code</th>
         <th>Désignation</th>
         <th>Qté</th>
-        <th>Long.</th>
-        <th>Larg.</th>
         <th>Prix U</th>
         <th>Total HT</th>
       </tr>
@@ -814,8 +790,6 @@ const FactureDetailsPage = () => {
           <td>${item.code || "—"}</td>
           <td>${item.designation || "—"}</td>
           <td class="text-center">${item.quantity}</td>
-          <td class="text-center">${item.v1}</td>
-          <td class="text-center">${item.v2}</td>
           <td class="text-end">${formatAmount(item.unitPrice)}</td>
           <td class="text-end">${formatAmount(item.totalPrice)}</td>
         </tr>
@@ -826,10 +800,9 @@ const FactureDetailsPage = () => {
   </table>
 
   <div class="totals">
-    <div>Sous-total HT : ${formatAmount(subTotal)} DH</div>
     ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
     <div>Total HT : ${formatAmount(totalHT)} DH</div>
-    <div>TVA (20%) :</div>
+    <div>TVA (${tvaRate}%) :</div>
     <div class="net-box">
       <span>Net TTC à payer</span>
       <span>${formatAmount(totalTTC)} DH</span>
@@ -847,30 +820,28 @@ const FactureDetailsPage = () => {
     </div>
   </div>
 
-  <div class="footer">
-    <p style="margin:2px 0;">
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p style="margin:2px 0;">
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-    <p style="margin-top:6px;">Signature et cachet: _________________________</p>
-  </div>
-
-  <script>
+  ${
+    autoPrint
+      ? `<script>
     window.onload = function () {
       window.print();
       setTimeout(() => window.close(), 100);
     };
-  </script>
+  </script>`
+      : ""
+  }
 
 </body>
 </html>
 `;
+  };
+
+  // Print function
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const content = buildPrintHTML({ autoPrint: true });
 
     printWindow.document.open();
     printWindow.document.write(content);
@@ -879,142 +850,59 @@ const FactureDetailsPage = () => {
 
   const generateAndDownloadPDF = async () => {
     try {
-      const container = document.createElement("div");
-      container.style.position = "relative";
-      container.style.left = "-9999px";
-      container.style.width = "210mm";
-      container.style.minHeight = "297mm";
-      container.style.padding = "10mm 10mm 40mm 10mm";
-      container.style.fontFamily = "Arial, sans-serif";
-      container.style.fontSize = "0.65rem";
-      container.style.textTransform = "uppercase";
-      container.style.background = "#fff";
+      const html = buildPrintHTML();
 
-      const creationDateFormatted = formatDateWithTime(formData.issueDate);
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.left = "-9999px";
+      iframe.style.top = "0";
+      iframe.style.width = "794px";
+      iframe.style.height = "1123px";
+      iframe.style.border = "none";
+      document.body.appendChild(iframe);
 
-      container.innerHTML = `
-      <div style="border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:flex-start;">
-        <div>
-          <h2 style="margin:0; font-size:1rem; letter-spacing:1px;">FACTURE</h2>
-          <div style="font-weight:bold; margin-top:4px;">STE. RACHIGLASS S.A.R.L. A.U</div>
-          <div>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-          <div>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</div>
-          <div>Email: ibaghatrachid83@gmail.com</div>
-          <div>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
-          <div>ICE: 003013206000054</div>
-        </div>
-        <div style="text-align:right;">
-          <strong>N° Facture :</strong> ${facture.invoiceNumber}<br/>
-          <strong>Date création :</strong> ${creationDateFormatted}
-        </div>
-      </div>
-
-      <div style="margin-bottom:20px;">
-        <strong>Client :</strong><br/>
-        ${formData.customerName}<br/>
-        ${formData.customerPhone ? `Tél: ${formData.customerPhone}` : ""}
-      </div>
-
-      <table style="width:100%; border-collapse:collapse; margin-top:10px; font-size:0.65rem;">
-        <thead>
-          <tr style="background:#f2f2f2;">
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Code</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Désignation</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Qté</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Long.</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Larg.</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Prix U</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:center;">Total HT</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${formData.items
-            .map(
-              (item) => `
-            <tr>
-              <td style="border:1.5px solid #000; padding:6px;">${item.code || "—"}</td>
-              <td style="border:1.5px solid #000; padding:6px;">${item.designation || "—"}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.quantity}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v1}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:center;">${item.v2}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.unitPrice)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(item.totalPrice)}</td>
-            </tr>
-          `,
-            )
-            .join("")}
-        </tbody>
-      </table>
-
-      <div style="margin-top:25px; display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-        <div>Sous-total HT : ${formatAmount(subTotal)} DH</div>
-        ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
-    <div>Total HT : ${formatAmount(totalHT)} DH</div>
-    <div>TVA (20%) :</div>
-    <div style="font-weight:bold; font-size:14px;">
-      <span>Total TTC : ${formatAmount(totalTTC)} DH</span>
-    </div>
-        ${
-          totalAdvancement > 0
-            ? `
-          <div>Avancements : -${formatAmount(totalAdvancement)} DH</div>
-          <div>Reste à payer : ${formatAmount(remainingAmount)} DH</div>
-        `
-            : ""
-        }
-        <div style="font-style:italic; font-weight:bold; font-size:0.7rem; text-align:right;">
-          ${totalToFrenchText(totalTTC)}
-        </div>
-      </div>
-
-      <div style="
-        position: absolute;
-        bottom: 10mm;
-        left: 10mm;
-        right: 10mm;
-        border-top: 2px solid #000;
-        padding-top: 8px;
-        text-align: center;
-        font-size: 8px;
-        color: #444;
-      ">
-        <p style="margin:2px 0;">
-          <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-          <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-        </p>
-        <p style="margin:2px 0;">
-          ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-          📱 06.09.68.52.11 &nbsp;|&nbsp;
-          Email: ibaghatrachid83@gmail.com
-        </p>
-        <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-        <p style="margin-top:6px;">Signature et cachet: _________________________</p>
-      </div>
-    `;
-
-      document.body.appendChild(container);
-
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        backgroundColor: "#fff",
+      await new Promise((resolve) => {
+        iframe.onload = resolve;
+        iframe.srcdoc = html;
       });
 
-      document.body.removeChild(container);
+      await new Promise((r) => setTimeout(r, 400));
 
+      const canvas = await html2canvas(iframe.contentDocument.body, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        width: 794,
+        height: 1123,
+        windowWidth: 794,
+        windowHeight: 1123,
+      });
+
+      document.body.removeChild(iframe);
+
+      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
-      const imgWidth = pdf.internal.pageSize.getWidth();
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
 
-      pdf.addImage(
-        canvas.toDataURL("image/png"),
-        "PNG",
-        0,
-        0,
-        imgWidth,
-        imgHeight,
-      );
+      const imgHeightMm = (canvas.height * pageWidth) / canvas.width;
+
+      if (imgHeightMm <= pageHeight) {
+        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, imgHeightMm);
+      } else {
+        let heightLeft = imgHeightMm;
+        let position = 0;
+        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeightMm);
+        heightLeft -= pageHeight;
+        while (heightLeft > 1) {
+          position = heightLeft - imgHeightMm;
+          pdf.addPage();
+          pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeightMm);
+          heightLeft -= pageHeight;
+        }
+      }
+
       pdf.save(`Facture-${facture.invoiceNumber}.pdf`);
-
       topTost("PDF généré et téléchargé !", "success");
     } catch (err) {
       console.error(err);
@@ -1507,12 +1395,6 @@ const FactureDetailsPage = () => {
         <Row className="mt-3">
           <Col md={7}>
             <div className="p-3 bg-light rounded">
-              <div className="d-flex justify-content-between mb-2">
-                <span>Sous-total HT:</span>
-                <strong className="text-info">
-                  {formatAmount(subTotal)} Dh
-                </strong>
-              </div>
               {discount > 0 && (
                 <div className="d-flex justify-content-between mb-2 text-danger">
                   <span>Remise:</span>

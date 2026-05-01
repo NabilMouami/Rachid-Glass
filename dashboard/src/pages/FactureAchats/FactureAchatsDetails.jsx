@@ -723,12 +723,7 @@ const FactureAchatsDetailsPage = () => {
   <div class="header">
     <div>
       <h2>FACTURE D'ACHAT</h2>
-      <div style="font-weight:bold; margin-top:4px;">STE. RACHIGLASS S.A.R.L. A.U</div>
-      <div>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</div>
-      <div>Tél: +212 606-071505 / +212 658-527241 / +212 609-685211</div>
-      <div>Email: ibaghatrachid83@gmail.com</div>
-      <div>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747</div>
-      <div>ICE: 003013206000054</div>
+   
     </div>
     <div style="text-align:right;">
       <strong>N° Facture :</strong> ${facture.invoiceNumber}<br/>
@@ -774,7 +769,6 @@ const FactureAchatsDetailsPage = () => {
   </table>
 
   <div class="totals">
-    <div>Sous-total HT : ${formatAmount(subTotal)} DH</div>
     ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
     <div>Total HT : ${formatAmount(totalHT)} DH</div>
     <div>TVA (${formData.tvaRate}%) : ${formatAmount(tvaAmount)} DH</div>

@@ -40,6 +40,7 @@ import ReportsPage from "../pages/Reports/ReportsPage";
 import FactureAchatCreate from "@/components/payment/FactureAchatCreate";
 import FactureAchatsList from "../pages/FactureAchats/FactureAchatsList";
 import FactureAchatsDetailsPage from "../pages/FactureAchats/FactureAchatsDetails";
+import CaissierPage from "../pages/BonLivraison/Caissierpage";
 
 export const router = createBrowserRouter([
   {
@@ -188,6 +189,10 @@ export const router = createBrowserRouter([
       {
         path: "facture-achat/:id",
         element: <FactureAchatsDetailsPage />,
+      },
+      {
+        path: "caissiers",
+        element: <CaissierPage />,
       },
     ],
   },

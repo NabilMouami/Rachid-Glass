@@ -601,26 +601,26 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     return qty * calcV1 * calcV2 * price;
   };
 
-  // Calculate Metre Lin for an item: (v1/100 + v2/100) * 2 * qty (using rounded values)
+  // Calculate Metre Lin for an item: (v1/100 + v2/100) * 2 * qty (using exact values)
   const calculateMetreLin = (item) => {
     const v1 = parseFloat(item.v1) || 0;
     const v2 = parseFloat(item.v2) || 0;
     // Return 0 for simple calculations (v1=1 and v2=1)
     if (v1 === 1 && v2 === 1) return 0;
-    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+    const calcV1 = v1 / 100;
+    const calcV2 = v2 / 100;
     const qty = parseFloat(item.quantity) || 0;
     return (calcV1 + calcV2) * 2 * qty;
   };
 
-  // Calculate Surface for an item: qty * (v1/100) * (v2/100) using rounded values
+  // Calculate Surface for an item: qty * (v1/100) * (v2/100) using exact values
   const calculateSurface = (item) => {
     const v1 = parseFloat(item.v1) || 0;
     const v2 = parseFloat(item.v2) || 0;
     // Return 0 for simple calculations (v1=1 and v2=1)
     if (v1 === 1 && v2 === 1) return 0;
-    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+    const calcV1 = v1 / 100;
+    const calcV2 = v2 / 100;
     const qty = parseFloat(item.quantity) || 0;
     return qty * calcV1 * calcV2;
   };
@@ -1226,17 +1226,26 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           const simple =
             (parseFloat(item.v1) || 1) === 1 &&
             (parseFloat(item.v2) || 1) === 1;
+          const v1 = parseFloat(item.v1) || 0;
+          const v2 = parseFloat(item.v2) || 0;
+          const qty = parseFloat(item.quantity) || 0;
+          const price = parseFloat(item.unitPrice) || 0;
+          
+          const ml = simple ? "-" : ((v1/100 + v2/100) * 2 * qty).toFixed(2);
+          const surf = simple ? "-" : (qty * (v1/100) * (v2/100)).toFixed(4);
+          const tot = simple ? (qty * price).toFixed(2) : (qty * (v1/100) * (v2/100) * price).toFixed(2);
+
           return `
         <tr>
           <td>${item.produit?.reference || item.code || "-"}</td>
           <td>${item.produit?.designation || "-"}</td>
-          <td>${parseFloat(item.quantity).toFixed(2)}</td>
-          <td>${(parseFloat(item.v1) || 1) === 1 ? "-" : parseFloat(item.v1).toFixed(2)}</td>
-          <td>${(parseFloat(item.v2) || 1) === 1 ? "-" : parseFloat(item.v2).toFixed(2)}</td>
-          <td>${simple ? "-" : ((roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100 + roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * 2 * (parseFloat(item.quantity) || 0)).toFixed(2)}</td>
-          <td>${simple ? "-" : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100)).toFixed(4)}</td>
-          <td>${parseFloat(item.unitPrice).toFixed(2)} Dh</td>
-          <td>${simple ? ((parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0)).toFixed(2) : ((parseFloat(item.quantity) || 0) * (roundToNextMultipleOfThree(parseFloat(item.v1) || 0) / 100) * (roundToNextMultipleOfThree(parseFloat(item.v2) || 0) / 100) * (parseFloat(item.unitPrice) || 0)).toFixed(2)} Dh</td>
+          <td>${qty.toFixed(2)}</td>
+          <td>${(v1 === 1 || v1 === 0) ? "-" : v1.toFixed(2)}</td>
+          <td>${(v2 === 1 || v2 === 0) ? "-" : v2.toFixed(2)}</td>
+          <td>${ml}</td>
+          <td>${surf}</td>
+          <td>${price.toFixed(2)} Dh</td>
+          <td>${tot} Dh</td>
         </tr>
       `;
         })

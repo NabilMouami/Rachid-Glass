@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
+
 import AsyncSelect from "react-select/async";
 import Select from "react-select";
 import { components } from "react-select";
@@ -66,8 +68,8 @@ const calculateMetreLin = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const calcV1 = v1 / 100;
+  const calcV2 = v2 / 100;
   const qty = parseFloat(item.quantity) || 0;
   return (calcV1 + calcV2) * 2 * qty;
 };
@@ -77,8 +79,8 @@ const calculateSurface = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+  const calcV1 = v1 / 100;
+  const calcV2 = v2 / 100;
   const qty = parseFloat(item.quantity) || 0;
   return qty * calcV1 * calcV2;
 };
@@ -282,6 +284,8 @@ const totalToFrenchText = (amount) => {
 
 const BonLivraisonDetailsPage = () => {
   const { id } = useParams();
+  const { User } = useSelector((state) => state.userInfo);
+
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -784,12 +788,13 @@ const BonLivraisonDetailsPage = () => {
     if (!printWindow) return;
 
     const creationDateFormatted = formatDateWithTime(formData.issueDate);
+    const totalText = totalToFrenchText(totalAfterDiscount);
 
-    const content = `
+    const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Bon de Livraison ${bon.deliveryNumber}</title>
+  <title>Bon Livraison ${bon.deliveryNumber}</title>
   <meta charset="UTF-8" />
   <style>
    @page {
@@ -801,232 +806,14 @@ const BonLivraisonDetailsPage = () => {
   body { margin: 15mm; }
   .no-print { display: none; }
 }
-    * {
-      box-sizing: border-box;
-      text-transform: uppercase;
-    }
 
     body {
       font-family: Arial, sans-serif;
-      font-size: 0.65rem;
-      color: #000;
-      margin: 0;
-      padding: 10mm;
-      padding-bottom: 70px;
-      background: #fff;
+      font-size: 10px;
+      margin: 20px;
+      color: #333;
     }
-
-    h2 {
-      margin: 0;
-      font-size: 1rem;
-      letter-spacing: 1px;
-    }
-
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      border-bottom: 2px solid #000;
-      padding-bottom: 10px;
-      margin-bottom: 20px;
-    }
-
-    .info {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 20px;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
-    }
-
-    th, td {
-      border: 1.5px solid #000;
-      padding: 6px;
-    }
-
-    th {
-      background: #f2f2f2;
-      text-align: center;
-    }
-
-    .text-center { text-align: center; }
-    .text-end { text-align: right; }
-
-    .totals {
-      margin-top: 25px;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 6px;
-    }
-
-    .net-box {
-      display: flex;
-      gap: 15px;
-      font-weight: bold;
-    }
-
-    .net-box span {
-      border: 2px solid #000;
-      padding: 10px 18px;
-      font-size: 0.7rem;
-    }
-
-    .italic {
-      font-style: italic;
-      font-weight: bold;
-      font-size: 0.7rem;
-      text-align: right;
-    }
-
-
-
-  </style>
-</head>
-
-<body>
-
-  <div class="header">
-    <div>
-      <h2>BON DE LIVRAISON</h2>
-
-    </div>
-    <div style="text-align:right;">
-      <strong>N° Bon :</strong> ${bon.deliveryNumber}<br/>
-      <strong>Date création :</strong> ${creationDateFormatted}<br/>
-      <strong>Préparé par :</strong> ${bon.preparedBy || bon.preparator?.name || "-"}
-    </div>
-  </div>
-
-  <div class="info">
-    <div>
-      <strong>Client :</strong><br/>
-      ${formData.customerName}
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Code</th>
-        <th>Désignation</th>
-        <th>Qté</th>
-        <th>Long.</th>
-        <th>Larg.</th>
-        <th>Mtre Lin.</th>
-        <th>Surface</th>
-        <th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${formData.items
-        .map((item) => {
-          const v1 = parseFloat(item.v1) || 1;
-          const v2 = parseFloat(item.v2) || 1;
-          const isSimpleCalc = v1 === 1 && v2 === 1;
-          const qty = parseFloat(item.quantity) || 0;
-          const price = parseFloat(item.unitPrice) || 0;
-
-          // Calculate total: qty * price for simple, else qty * (v1/100rounded) * (v2/100rounded) * price
-          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
-          const total = isSimpleCalc
-            ? qty * price
-            : qty * calcV1 * calcV2 * price;
-
-          return `
-        <tr>
-          <td>${item.code || "—"}</td>
-          <td>${item.designation || "—"}</td>
-          <td class="text-center">${item.quantity}</td>
-          <td class="text-center">${v1 === 1 ? "-" : item.v1}</td>
-          <td class="text-center">${v2 === 1 ? "-" : item.v2}</td>
-          <td class="text-center">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
-          <td class="text-center">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
-          <td class="text-end">${formatAmount(total)}</td>
-        </tr>
-      `;
-        })
-        .join("")}
-    </tbody>
-  </table>
-
-  <div class="totals">
-    <div>Sous-total : ${formatAmount(subTotal)} DH</div>
-    ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
-    <div class="net-box">
-      <span>Net à payer</span>
-      <span>${formatAmount(totalAfterDiscount)} DH</span>
-    </div>
-    <div class="italic">
-      ${totalToFrenchText(totalAfterDiscount)}
-    </div>
-  </div>
-  <script>
-    window.onload = function () {
-      window.print();
-      setTimeout(() => window.close(), 100);
-    };
-  </script>
-
-</body>
-</html>
-`;
-
-    printWindow.document.open();
-    printWindow.document.write(content);
-    printWindow.document.close();
-  };
-
-  // Print for Client - without company internal info
-  const handlePrintClient = () => {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
-
-    const creationDateFormatted = formatDateWithTime(formData.issueDate);
-
-    const content = `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Bon de Livraison ${bon.deliveryNumber}</title>
-  <meta charset="UTF-8" />
-  <style>
-   @page {
-  margin: 0;
-  size: A4;
-}
-
-@media print {
-  body { margin: 15mm; }
-  .no-print { display: none; }
-}
-    * {
-      box-sizing: border-box;
-      text-transform: uppercase;
-    }
-
-    body {
-      font-family: Arial, sans-serif;
-      font-size: 0.65rem;
-      color: #000;
-      margin: 0;
-      padding: 10mm;
-      padding-bottom: 70px;
-      background: #fff;
-    }
-
-    h2 {
-      margin: 0;
-      font-size: 1rem;
-      letter-spacing: 1px;
-    }
-
-  .header {
+     .header {
       text-align: center;
       border-bottom: 2px solid #333;
       padding-bottom: 10px;
@@ -1038,53 +825,36 @@ const BonLivraisonDetailsPage = () => {
       flex-wrap: wrap;
       margin-bottom: 20px;
     }
-
-    .info {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 20px;
+    .info-block {
+      flex: 1;
+      min-width: 220px;
     }
-
-    table {
+    .info-block p { margin: 3px 0; }
+    .table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 10px;
+      margin: 15px 0;
+      table-layout: fixed;
     }
-
-    th, td {
-      border: 1.5px solid #000;
+    .table th, .table td {
+      border: 1px solid #ddd;
       padding: 6px;
+      text-align: left;
+      word-wrap: break-word;
+      white-space: normal;
+      vertical-align: top;
     }
-
-    th {
-      background: #f2f2f2;
-      text-align: center;
-    }
-
-    .text-center { text-align: center; }
-    .text-end { text-align: right; }
-
+    .table th { background-color: #f5f5f5; }
+    .table td:first-child { width: 30%; }
     .totals {
-      margin-top: 25px;
+      margin-top: 20px;
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      gap: 6px;
     }
-
-    .net-box {
-      display: flex;
-      gap: 15px;
-      font-weight: bold;
-    }
-
-    .net-box span {
-      border: 2px solid #000;
-      padding: 10px 18px;
-      font-size: 0.7rem;
-    }
-
-    .italic {
+    .totals p { margin: 2px 0; }
+        .italic {
+      margin-top: 10px;
       font-style: italic;
       font-weight: bold;
       font-size: 0.7rem;
@@ -1104,15 +874,202 @@ const BonLivraisonDetailsPage = () => {
     }
   </style>
 </head>
-
 <body>
-
-    <div class="header">
+  <div class="header">
     <h2 style="margin: 0;">BON LIVRAISON</h2>
     <h3 style="margin: 5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
     <p>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</p>
     <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
   </div>
+
+
+  <div class="invoice-info">
+    <div class="info-block">
+      <p><strong>Client:</strong> ${formData.customerName}</p>
+                  <p><strong>Créer Par:</strong> ${User.name}</p>
+
+    </div>
+    <div class="info-block" style="text-align:right;">
+      <p><strong>N° BL:</strong> ${bon.deliveryNumber}</p>
+      <p><strong>Date Creation:</strong> ${creationDateFormatted}</p>
+    </div>
+  </div>
+
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Code</th>
+        <th>Designation</th>
+        <th>Qté</th>
+        <th>Long.</th>
+        <th>Larg.</th>
+        <th>Mtre Lin.</th>
+        <th>Surface</th>
+        <th>Prix U.</th>
+        <th>Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${formData.items
+        .map((item) => {
+          const simple =
+            (parseFloat(item.v1) || 1) === 1 &&
+            (parseFloat(item.v2) || 1) === 1;
+          const v1 = parseFloat(item.v1) || 0;
+          const v2 = parseFloat(item.v2) || 0;
+          const qty = parseFloat(item.quantity) || 0;
+          const price = parseFloat(item.unitPrice) || 0;
+
+          const ml = simple
+            ? "-"
+            : ((v1 / 100 + v2 / 100) * 2 * qty).toFixed(2);
+          const surf = simple
+            ? "-"
+            : (qty * (v1 / 100) * (v2 / 100)).toFixed(4);
+          const tot = simple
+            ? (qty * price).toFixed(2)
+            : (qty * (v1 / 100) * (v2 / 100) * price).toFixed(2);
+
+          return `
+        <tr>
+          <td>${item.produit?.reference || item.code || "-"}</td>
+          <td>${item.produit?.designation || "-"}</td>
+          <td>${qty.toFixed(2)}</td>
+          <td>${v1 === 1 || v1 === 0 ? "-" : v1.toFixed(2)}</td>
+          <td>${v2 === 1 || v2 === 0 ? "-" : v2.toFixed(2)}</td>
+          <td>${ml}</td>
+          <td>${surf}</td>
+          <td>${price.toFixed(2)} Dh</td>
+          <td>${tot} Dh</td>
+        </tr>
+      `;
+        })
+        .join("")}
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <p><strong>Net à payer:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
+    <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+    <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
+  </div>
+  <div class="italic">${totalText}</div>
+
+
+  <script>
+    window.onload = function () {
+      window.print();
+      setTimeout(() => window.close(), 100);
+    };
+  </script>
+</body>
+</html>
+`;
+
+    printWindow.document.open();
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+  };
+
+  const handlePrintClient = () => {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    const creationDateFormatted = formatDateWithTime(formData.issueDate);
+    const totalText = totalToFrenchText(totalAfterDiscount);
+
+    const printContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Bon Livraison Client ${bon.deliveryNumber}</title>
+  <meta charset="UTF-8" />
+  <style>
+   @page {
+  margin: 0;
+  size: A4;
+}
+
+@media print {
+  body { margin: 15mm; }
+  .no-print { display: none; }
+}
+
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 10px;
+      margin: 20px;
+      color: #333;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 2px solid #333;
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+    .company-info, .invoice-info {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .info-block {
+      flex: 1;
+      min-width: 220px;
+    }
+    .info-block p { margin: 3px 0; }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+      table-layout: fixed;
+    }
+    .table th, .table td {
+      border: 1px solid #ddd;
+      padding: 6px;
+      text-align: left;
+      word-wrap: break-word;
+      white-space: normal;
+      vertical-align: top;
+    }
+    .table th { background-color: #f5f5f5; }
+    .table td:first-child { width: 30%; }
+    .totals {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .totals p { margin: 2px 0; }
+        .italic {
+      margin-top: 10px;
+      font-style: italic;
+      font-weight: bold;
+      font-size: 0.7rem;
+      text-align: right;
+    }
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      border-top: 2px solid #333;
+      padding: 8px 10px;
+      text-align: center;
+      font-size: 8px;
+      color: #444;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+ <div class="header">
+    <h2 style="margin: 0;">BON LIVRAISON</h2>
+    <h3 style="margin: 5px 0;">STE. RACHIGLASS S.A.R.L. A.U</h3>
+    <p>VENTE TOUS TYPE DE VERRE — IMPORT / EXPORT</p>
+    <p>Tél: +212 607-150550 / +212 658-527241 / +212 609-685211</p>
+  </div>
+
 
 
   <div class="invoice-info">
@@ -1124,49 +1081,52 @@ const BonLivraisonDetailsPage = () => {
       <p><strong>Date Creation:</strong> ${creationDateFormatted}</p>
     </div>
   </div>
-
-
-  <table>
+  <table class="table">
     <thead>
       <tr>
         <th>Code</th>
-        <th>Désignation</th>
+        <th>Designation</th>
         <th>Qté</th>
         <th>Long.</th>
         <th>Larg.</th>
         <th>Mtre Lin.</th>
         <th>Surface</th>
-        <th>Prix U</th>
+        <th>Prix U.</th>
         <th>Total</th>
       </tr>
     </thead>
     <tbody>
       ${formData.items
         .map((item) => {
-          const v1 = parseFloat(item.v1) || 1;
-          const v2 = parseFloat(item.v2) || 1;
-          const isSimpleCalc = v1 === 1 && v2 === 1;
+          const simple =
+            (parseFloat(item.v1) || 1) === 1 &&
+            (parseFloat(item.v2) || 1) === 1;
+          const v1 = parseFloat(item.v1) || 0;
+          const v2 = parseFloat(item.v2) || 0;
           const qty = parseFloat(item.quantity) || 0;
           const price = parseFloat(item.unitPrice) || 0;
 
-          // Calculate total: qty * price for simple, else qty * (v1/100rounded) * (v2/100rounded) * price
-          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
-          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
-          const total = isSimpleCalc
-            ? qty * price
-            : qty * calcV1 * calcV2 * price;
+          const ml = simple
+            ? "-"
+            : ((v1 / 100 + v2 / 100) * 2 * qty).toFixed(2);
+          const surf = simple
+            ? "-"
+            : (qty * (v1 / 100) * (v2 / 100)).toFixed(4);
+          const tot = simple
+            ? (qty * price).toFixed(2)
+            : (qty * (v1 / 100) * (v2 / 100) * price).toFixed(2);
 
           return `
         <tr>
-          <td>${item.code || "—"}</td>
-          <td>${item.designation || "—"}</td>
-          <td class="text-center">${item.quantity}</td>
-          <td class="text-center">${v1 === 1 ? "-" : item.v1}</td>
-          <td class="text-center">${v2 === 1 ? "-" : item.v2}</td>
-          <td class="text-center">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
-          <td class="text-center">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
-          <td class="text-end">${formatAmount(price)}</td>
-          <td class="text-end">${formatAmount(total)}</td>
+          <td>${item.produit?.reference || item.code || "-"}</td>
+          <td>${item.produit?.designation || "-"}</td>
+          <td>${qty.toFixed(2)}</td>
+          <td>${v1 === 1 || v1 === 0 ? "-" : v1.toFixed(2)}</td>
+          <td>${v2 === 1 || v2 === 0 ? "-" : v2.toFixed(2)}</td>
+          <td>${ml}</td>
+          <td>${surf}</td>
+          <td>${price.toFixed(2)} Dh</td>
+          <td>${tot} Dh</td>
         </tr>
       `;
         })
@@ -1175,29 +1135,12 @@ const BonLivraisonDetailsPage = () => {
   </table>
 
   <div class="totals">
-    <div>Sous-total : ${formatAmount(subTotal)} DH</div>
-    ${discount > 0 ? `<div>Remise : -${formatAmount(discount)} DH</div>` : ""}
-    <div class="net-box">
-      <span>Net à payer</span>
-      <span>${formatAmount(totalAfterDiscount)} DH</span>
-    </div>
-    <div class="italic">
-      ${totalToFrenchText(totalAfterDiscount)}
-    </div>
+    <p><strong>Net à payer:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
+    <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
+    <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
   </div>
+  <div class="italic">${totalText}</div>
 
-     <div class="footer">
-    <p>
-      <strong>Siège Social:</strong> Bni Boughamaren, Arimam Ihaddaden &nbsp;|&nbsp;
-      <strong>Magasin:</strong> Hay Barraka Près de mosquée I Awaden
-    </p>
-    <p>
-      ☎ 06.07.15.05.50 — 06.58.52.72.41 &nbsp;|&nbsp;
-      📱 06.09.68.52.11 &nbsp;|&nbsp;
-      Email: ibaghatrachid83@gmail.com
-    </p>
-    <p>TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-  </div>
 
   <script>
     window.onload = function () {
@@ -1205,13 +1148,12 @@ const BonLivraisonDetailsPage = () => {
       setTimeout(() => window.close(), 100);
     };
   </script>
-
 </body>
 </html>
 `;
 
     printWindow.document.open();
-    printWindow.document.write(content);
+    printWindow.document.write(printContent);
     printWindow.document.close();
   };
 
@@ -1459,9 +1401,7 @@ const BonLivraisonDetailsPage = () => {
         </div>
       </div>
 
-      <div style="position:fixed; bottom:0; left:0; right:0; border-top:2px solid #000; padding:8px 10mm; text-align:center; font-size:8px; color:#444; background:white;">
-        <p style="margin-top:6px;">Signature et cachet: _________________________</p>
-      </div>
+   
       `;
 
       document.body.appendChild(container);
