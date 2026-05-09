@@ -1714,37 +1714,30 @@ const BonLivraisonDetailsPage = () => {
 
                     {/* Longueur (v1) */}
                     <td className="align-middle text-center">
-                      {parseFloat(item.v1) === 1 ? (
-                        <span className="text-primary fw-bold">-</span>
-                      ) : (
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v1}
-                          onChange={(e) =>
-                            handleItemChange(index, "v1", e.target.value)
-                          }
-                          min="1"
-                        />
-                      )}
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={item.v1}
+                        onChange={(e) =>
+                          handleItemChange(index, "v1", e.target.value)
+                        }
+                        min="0.01"
+                        step="0.01"
+                      />
                     </td>
 
                     {/* Largeur (v2) */}
                     <td className="align-middle text-center">
-                      {parseFloat(item.v2) === 1 ? (
-                        <span className="text-primary fw-bold">-</span>
-                      ) : (
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v2}
-                          onChange={(e) =>
-                            handleItemChange(index, "v2", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
-                      )}
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={item.v2}
+                        onChange={(e) =>
+                          handleItemChange(index, "v2", e.target.value)
+                        }
+                        min="0.01"
+                        step="0.01"
+                      />
                     </td>
 
                     {/* Metre Lineaire: Show '-' if simple calculation (v1=1 and v2=1), else calculate */}

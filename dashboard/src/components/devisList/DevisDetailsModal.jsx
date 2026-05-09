@@ -1361,38 +1361,30 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
 
                       {/* Longueur (v1) - Input */}
                       <td>
-                        {parseFloat(ligne.v1) === 1 ? (
-                          <span className="text-primary fw-bold">-</span>
-                        ) : (
-                          <input
-                            type="number"
-                            className="form-control form-control-sm"
-                            value={ligne.v1}
-                            onChange={(e) =>
-                              handleLigneChange(index, "v1", e.target.value)
-                            }
-                            min="0.01"
-                            step="0.01"
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={ligne.v1}
+                          onChange={(e) =>
+                            handleLigneChange(index, "v1", e.target.value)
+                          }
+                          min="0.01"
+                          step="0.01"
+                        />
                       </td>
 
                       {/* Largeur (v2) - Input */}
                       <td>
-                        {parseFloat(ligne.v2) === 1 ? (
-                          <span className="text-primary fw-bold">-</span>
-                        ) : (
-                          <input
-                            type="number"
-                            className="form-control form-control-sm"
-                            value={ligne.v2}
-                            onChange={(e) =>
-                              handleLigneChange(index, "v2", e.target.value)
-                            }
-                            min="0.01"
-                            step="0.01"
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={ligne.v2}
+                          onChange={(e) =>
+                            handleLigneChange(index, "v2", e.target.value)
+                          }
+                          min="0.01"
+                          step="0.01"
+                        />
                       </td>
 
                       {/* prix/Unité - Input */}

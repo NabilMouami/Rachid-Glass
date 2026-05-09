@@ -146,9 +146,35 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
     if (!printWindow) return;
 
     const blOnly = bonLivraisonsOnly;
-    const totalAmount = blOnly.reduce((sum, doc) => sum + (parseFloat(doc.montantTTC) || 0), 0);
-    const totalPaid = blOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalPaid) || 0), 0);
-    const totalRemaining = blOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalRemaining) || 0), 0);
+
+    const calculatePaidAmount = (doc) => {
+      const montantTTC = parseFloat(doc.montantTTC) || 0;
+      if (doc.paymentStatus === "payée") {
+        return montantTTC; // ← this was already correct in the print function
+      } else if (doc.paymentStatus === "partiellement_payée") {
+        return parseFloat(doc.totalPaid) || 0; // ← remove the fallback * 0.5
+      } else {
+        return parseFloat(doc.totalPaid) || 0;
+      }
+    };
+
+    const totalAmount = blOnly.reduce(
+      (sum, doc) => sum + (parseFloat(doc.montantTTC) || 0),
+      0,
+    );
+    const totalPaid = blOnly.reduce(
+      (sum, doc) => sum + calculatePaidAmount(doc),
+      0,
+    );
+    const totalRemaining = blOnly.reduce(
+      (sum, doc) =>
+        sum +
+        Math.max(
+          0,
+          (parseFloat(doc.montantTTC) || 0) - calculatePaidAmount(doc),
+        ),
+      0,
+    );
 
     const content = `
 <!DOCTYPE html>
@@ -238,11 +264,13 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
       </tr>
     </thead>
     <tbody>
-      ${blOnly.map(doc => `
+      ${blOnly
+        .map(
+          (doc) => `
         <tr>
           <td>
             ${doc.numero}
-            ${doc.is_facture === false ? '<br><small style="color:#666;">Non facturé</small>' : ''}
+            ${doc.is_facture === false ? '<br><small style="color:#666;">Non facturé</small>' : ""}
           </td>
           <td>${formatDate(doc.date)}</td>
           <td><span class="badge ${getStatusColor(doc.paymentStatus)}">${getStatusText(doc.paymentStatus)}</span></td>
@@ -250,7 +278,9 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
           <td class="text-right text-success">${formatCurrency(doc.totalPaid)}</td>
           <td class="text-right text-danger">${formatCurrency(doc.totalRemaining)}</td>
         </tr>
-      `).join("")}
+      `,
+        )
+        .join("")}
       <tr style="background:#f2f2f2;font-weight:bold;">
         <td colspan="3" class="text-right">TOTAUX:</td>
         <td class="text-right">${formatCurrency(totalAmount)}</td>
@@ -260,7 +290,9 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
     </tbody>
   </table>
 
-  ${paymentData?.advancements?.length > 0 ? `
+  ${
+    paymentData?.advancements?.length > 0
+      ? `
   <h3 style="margin-top:20px;">Historique des Avancements</h3>
   <table>
     <thead>
@@ -272,21 +304,27 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
       </tr>
     </thead>
     <tbody>
-      ${paymentData.advancements.map(adv => `
+      ${paymentData.advancements
+        .map(
+          (adv) => `
         <tr>
           <td>${formatDate(adv.paymentDate)}</td>
           <td class="text-success">${formatCurrency(adv.amount)}</td>
-          <td>${adv.paymentMethod === 'espece' ? 'Espèce' : adv.paymentMethod === 'cheque' ? 'Chèque' : adv.paymentMethod === 'virement' ? 'Virement' : adv.paymentMethod === 'carte' ? 'Carte' : adv.paymentMethod || '-'}</td>
-          <td>${adv.reference || '-'}</td>
+          <td>${adv.paymentMethod === "espece" ? "Espèce" : adv.paymentMethod === "cheque" ? "Chèque" : adv.paymentMethod === "virement" ? "Virement" : adv.paymentMethod === "carte" ? "Carte" : adv.paymentMethod || "-"}</td>
+          <td>${adv.reference || "-"}</td>
         </tr>
-      `).join("")}
+      `,
+        )
+        .join("")}
       <tr style="background:#f2f2f2;font-weight:bold;">
         <td colspan="2" class="text-right">TOTAL AVANCEMENTS:</td>
         <td colspan="2" class="text-right text-success">${formatCurrency(paymentData.advancements.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0))}</td>
       </tr>
     </tbody>
   </table>
-  ` : ''}
+  `
+      : ""
+  }
 
   <div class="footer">
     <p>Généré le ${new Date().toLocaleString("fr-FR")}</p>
@@ -305,9 +343,8 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   };
 
   // Filter to show only Bon Livraisons
-  const bonLivraisonsOnly = paymentData?.documents?.filter(
-    (doc) => doc.type === "bon-livraison"
-  ) || [];
+  const bonLivraisonsOnly =
+    paymentData?.documents?.filter((doc) => doc.type === "bon-livraison") || [];
 
   // Handle view document
   const handleViewDocument = (doc) => {
@@ -321,16 +358,21 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   if (loading) {
     return (
       <div
-        className="modal fade show d-block" onClick={onClose}
+        className="modal fade show d-block"
+        onClick={onClose}
         style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
       >
-        <div className="modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-dialog modal-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="modal-content">
             <div className="modal-header position-relative">
               <h5 className="modal-title">Statut de Paiement</h5>
               <button
                 type="button"
-                className="btn-close position-absolute" style={{ top: "15px", right: "15px" }}
+                className="btn-close position-absolute"
+                style={{ top: "15px", right: "15px" }}
                 onClick={onClose}
               ></button>
             </div>
@@ -349,16 +391,21 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
   if (error) {
     return (
       <div
-        className="modal fade show d-block" onClick={onClose}
+        className="modal fade show d-block"
+        onClick={onClose}
         style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
       >
-        <div className="modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-dialog modal-lg"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="modal-content">
             <div className="modal-header position-relative">
               <h5 className="modal-title">Statut de Paiement</h5>
               <button
                 type="button"
-                className="btn-close position-absolute" style={{ top: "15px", right: "15px" }}
+                className="btn-close position-absolute"
+                style={{ top: "15px", right: "15px" }}
                 onClick={onClose}
               ></button>
             </div>
@@ -378,15 +425,21 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
 
   return (
     <div
-      className="modal fade show d-block" onClick={onClose}
+      className="modal fade show d-block"
+      onClick={onClose}
       style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
     >
-      <div className="modal-dialog modal-xl" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-dialog modal-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-content">
           {/* Header */}
           <div className="modal-header bg-light position-relative">
             <div>
-              <h5 className="modal-title mb-1">État de Paiement - Client (Tous les Statuts)</h5>
+              <h5 className="modal-title mb-1">
+                État de Paiement - Client (Tous les Statuts)
+              </h5>
               <p className="text-muted mb-0 small">
                 {clientName} | Dernière mise à jour:{" "}
                 {paymentData?.timestamp
@@ -405,7 +458,8 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
               </button>
               <button
                 type="button"
-                className="btn-close position-absolute" style={{ top: "15px", right: "15px" }}
+                className="btn-close position-absolute"
+                style={{ top: "15px", right: "15px" }}
                 onClick={onClose}
               ></button>
             </div>
@@ -415,17 +469,23 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
           <div className="modal-body">
             {paymentData && (
               <>
-{/* Statistics Cards - Bon Livraisons Only */}
+                {/* Statistics Cards - Bon Livraisons Only */}
                 <div className="row mb-4">
                   <div className="col-md-4 mb-3">
                     <div className="card border-primary">
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center">
                           <div>
-                            <h6 className="text-muted mb-1">Montant Total BL</h6>
+                            <h6 className="text-muted mb-1">
+                              Montant Total BL
+                            </h6>
                             <h3 className="mb-0">
                               {formatCurrency(
-                                bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.montantTTC) || 0), 0)
+                                bonLivraisonsOnly.reduce(
+                                  (sum, doc) =>
+                                    sum + (parseFloat(doc.montantTTC) || 0),
+                                  0,
+                                ),
                               )}
                             </h3>
                           </div>
@@ -445,7 +505,31 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                             <h6 className="text-muted mb-1">Déjà Payé BL</h6>
                             <h3 className="mb-0">
                               {formatCurrency(
-                                bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalPaid) || 0), 0)
+                                bonLivraisonsOnly.reduce((sum, doc) => {
+                                  let paidAmount = 0;
+                                  const montantTTC =
+                                    parseFloat(doc.montantTTC) || 0;
+
+                                  // Calculate paid amount based on status
+                                  if (doc.paymentStatus === "payée") {
+                                    paidAmount = montantTTC;
+                                  } else if (
+                                    doc.paymentStatus === "partiellement_payée"
+                                  ) {
+                                    // Use totalPaid if available, otherwise calculate based on your logic
+                                    paidAmount =
+                                      parseFloat(doc.totalPaid) ||
+                                      montantTTC * 0.5; // Example: 50% for partially paid
+                                  } else if (
+                                    doc.paymentStatus === "brouillon"
+                                  ) {
+                                    paidAmount = 0;
+                                  } else {
+                                    paidAmount = parseFloat(doc.totalPaid) || 0;
+                                  }
+
+                                  return sum + paidAmount;
+                                }, 0),
                               )}
                             </h3>
                           </div>
@@ -462,10 +546,37 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-center">
                           <div>
-                            <h6 className="text-muted mb-1">Reste à Payer BL</h6>
+                            <h6 className="text-muted mb-1">
+                              Reste à Payer BL
+                            </h6>
                             <h3 className="mb-0">
                               {formatCurrency(
-                                bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalRemaining) || 0), 0)
+                                bonLivraisonsOnly.reduce((sum, doc) => {
+                                  const montantTTC =
+                                    parseFloat(doc.montantTTC) || 0;
+                                  let paidAmount = 0;
+
+                                  // Calculate paid amount based on status (same logic as above)
+                                  if (doc.paymentStatus === "payée") {
+                                    paidAmount = montantTTC;
+                                  } else if (
+                                    doc.paymentStatus === "partiellement_payée"
+                                  ) {
+                                    paidAmount =
+                                      parseFloat(doc.totalPaid) ||
+                                      montantTTC * 0.5;
+                                  } else if (
+                                    doc.paymentStatus === "brouillon"
+                                  ) {
+                                    paidAmount = 0;
+                                  } else {
+                                    paidAmount = parseFloat(doc.totalPaid) || 0;
+                                  }
+
+                                  const remainingAmount =
+                                    montantTTC - paidAmount;
+                                  return sum + Math.max(0, remainingAmount);
+                                }, 0),
                               )}
                             </h3>
                           </div>
@@ -541,7 +652,9 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                       </span>
                                     </td>
                                     <td>
-                                      <strong>{formatCurrency(doc.montantTTC)}</strong>
+                                      <strong>
+                                        {formatCurrency(doc.montantTTC)}
+                                      </strong>
                                     </td>
                                     <td>
                                       <span className="text-success">
@@ -577,7 +690,8 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                     </td>
                                   </tr>
                                 ))}
-</tbody>
+                              </tbody>
+
                               <tfoot>
                                 <tr className="table-active">
                                   <td colSpan="3" className="text-end">
@@ -586,21 +700,78 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                   <td>
                                     <strong>
                                       {formatCurrency(
-                                        bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.montantTTC) || 0), 0)
+                                        bonLivraisonsOnly.reduce(
+                                          (sum, doc) =>
+                                            sum +
+                                            (parseFloat(doc.montantTTC) || 0),
+                                          0,
+                                        ),
                                       )}
                                     </strong>
                                   </td>
                                   <td>
                                     <strong className="text-success">
                                       {formatCurrency(
-                                        bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalPaid) || 0), 0)
+                                        bonLivraisonsOnly.reduce((sum, doc) => {
+                                          let paidAmount = 0;
+                                          const montantTTC =
+                                            parseFloat(doc.montantTTC) || 0;
+
+                                          if (doc.paymentStatus === "payée") {
+                                            paidAmount = montantTTC;
+                                          } else if (
+                                            doc.paymentStatus ===
+                                            "partiellement_payée"
+                                          ) {
+                                            paidAmount =
+                                              parseFloat(doc.totalPaid) ||
+                                              montantTTC * 0.5;
+                                          } else if (
+                                            doc.paymentStatus === "brouillon"
+                                          ) {
+                                            paidAmount = 0;
+                                          } else {
+                                            paidAmount =
+                                              parseFloat(doc.totalPaid) || 0;
+                                          }
+
+                                          return sum + paidAmount;
+                                        }, 0),
                                       )}
                                     </strong>
                                   </td>
                                   <td>
                                     <strong className="text-danger">
                                       {formatCurrency(
-                                        bonLivraisonsOnly.reduce((sum, doc) => sum + (parseFloat(doc.totalRemaining) || 0), 0)
+                                        bonLivraisonsOnly.reduce((sum, doc) => {
+                                          const montantTTC =
+                                            parseFloat(doc.montantTTC) || 0;
+                                          let paidAmount = 0;
+
+                                          if (doc.paymentStatus === "payée") {
+                                            paidAmount = montantTTC;
+                                          } else if (
+                                            doc.paymentStatus ===
+                                            "partiellement_payée"
+                                          ) {
+                                            paidAmount =
+                                              parseFloat(doc.totalPaid) ||
+                                              montantTTC * 0.5;
+                                          } else if (
+                                            doc.paymentStatus === "brouillon"
+                                          ) {
+                                            paidAmount = 0;
+                                          } else {
+                                            paidAmount =
+                                              parseFloat(doc.totalPaid) || 0;
+                                          }
+
+                                          const remainingAmount =
+                                            montantTTC - paidAmount;
+                                          return (
+                                            sum + Math.max(0, remainingAmount)
+                                          );
+                                        }, 0),
                                       )}
                                     </strong>
                                   </td>
@@ -618,73 +789,83 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
             )}
 
             {/* Advancements Table */}
-            {paymentData?.advancements && paymentData.advancements.length > 0 && (
-              <div className="row mt-4">
-                <div className="col-12">
-                  <div className="card">
-                    <div className="card-header">
-                      <h6 className="card-title mb-0">
-                        <FiDollarSign className="me-2" />
-                        Historique des Avancements ({paymentData.advancements.length})
-                      </h6>
-                    </div>
-                    <div className="card-body">
-                      <div className="table-responsive">
-                        <table className="table table-hover">
-                          <thead>
-                            <tr>
-                              <th>Date</th>
-                              <th>Montant</th>
-                              <th>Mode de Paiement</th>
-                              <th>Référence</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {paymentData.advancements.map((adv, index) => (
-                              <tr key={index}>
-                                <td>
-                                  <span className="d-flex align-items-center">
-                                    <FiCalendar className="me-1 text-muted" />
-                                    {formatDate(adv.paymentDate)}
-                                  </span>
-                                </td>
-                                <td>
-                                  <span className="text-success fw-bold">
-                                    {formatCurrency(adv.amount)}
-                                  </span>
-                                </td>
-                                <td>
-                                  {adv.paymentMethod === 'espece' ? 'Espèce' :
-                                   adv.paymentMethod === 'cheque' ? 'Chèque' :
-                                   adv.paymentMethod === 'virement' ? 'Virement' :
-                                   adv.paymentMethod === 'carte' ? 'Carte' :
-                                   adv.paymentMethod || '-'}
-                                </td>
-                                <td>{adv.reference || '-'}</td>
+            {paymentData?.advancements &&
+              paymentData.advancements.length > 0 && (
+                <div className="row mt-4">
+                  <div className="col-12">
+                    <div className="card">
+                      <div className="card-header">
+                        <h6 className="card-title mb-0">
+                          <FiDollarSign className="me-2" />
+                          Historique des Avancements (
+                          {paymentData.advancements.length})
+                        </h6>
+                      </div>
+                      <div className="card-body">
+                        <div className="table-responsive">
+                          <table className="table table-hover">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Montant</th>
+                                <th>Mode de Paiement</th>
+                                <th>Référence</th>
                               </tr>
-                            ))}
-                          </tbody>
-                          <tfoot>
-                            <tr className="table-active">
-                              <td colSpan="2" className="text-end">
-                                <strong>Total Avancements:</strong>
-                              </td>
-                              <td colspan="2">
-                                <strong className="text-success">
-                                  {formatCurrency(
-                                    paymentData.advancements.reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0)
-                                  )}
-                                </strong>
-                              </td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {paymentData.advancements.map((adv, index) => (
+                                <tr key={index}>
+                                  <td>
+                                    <span className="d-flex align-items-center">
+                                      <FiCalendar className="me-1 text-muted" />
+                                      {formatDate(adv.paymentDate)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <span className="text-success fw-bold">
+                                      {formatCurrency(adv.amount)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    {adv.paymentMethod === "espece"
+                                      ? "Espèce"
+                                      : adv.paymentMethod === "cheque"
+                                        ? "Chèque"
+                                        : adv.paymentMethod === "virement"
+                                          ? "Virement"
+                                          : adv.paymentMethod === "carte"
+                                            ? "Carte"
+                                            : adv.paymentMethod || "-"}
+                                  </td>
+                                  <td>{adv.reference || "-"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="table-active">
+                                <td colSpan="2" className="text-end">
+                                  <strong>Total Avancements:</strong>
+                                </td>
+                                <td colspan="2">
+                                  <strong className="text-success">
+                                    {formatCurrency(
+                                      paymentData.advancements.reduce(
+                                        (sum, a) =>
+                                          sum + (parseFloat(a.amount) || 0),
+                                        0,
+                                      ),
+                                    )}
+                                  </strong>
+                                </td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
 
           {/* Footer */}

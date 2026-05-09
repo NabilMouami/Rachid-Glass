@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { format, startOfDay, endOfDay, subDays, parseISO } from "date-fns";
+import { format, startOfDay, endOfDay, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   FiTrendingUp,
@@ -171,7 +171,8 @@ function TxRow({ bon }) {
         </span>
       </td>
       <td className="caisse-tx-amount">{fmt(bon.total)} Dh</td>
-      <td className="caisse-tx-adv">{fmt(bon.advancement)} Dh</td>
+      {/* ✅ paidOnDate = amount actually paid on this specific date */}
+      <td className="caisse-tx-adv">{fmt(bon.paidOnDate || 0)} Dh</td>
       <td
         className={`caisse-tx-rest ${parseFloat(bon.remainingAmount) > 0 ? "owed" : ""}`}
       >
@@ -209,7 +210,7 @@ export default function CaissierPage() {
       .finally(() => setLoading(false));
   }, [refreshKey, date]);
 
-  // Filter by selected date (createdAt OR paymentDate)
+  // Filter by selected date (createdAt OR paymentDate OR advancements)
   const dayBons = useMemo(() => {
     const d = new Date(date);
     const start = startOfDay(d).getTime();
@@ -220,10 +221,13 @@ export default function CaissierPage() {
 
       if (b.paymentDate) {
         const paymentTime = new Date(b.paymentDate).getTime();
-        if (!isNaN(paymentTime) && paymentTime >= start && paymentTime <= end) {
+        if (!isNaN(paymentTime) && paymentTime >= start && paymentTime <= end)
           return true;
-        }
       }
+
+      // ✅ Also keep if it has advancements on this date (already filtered by backend)
+      if (b.advancements && b.advancements.length > 0) return true;
+
       return false;
     });
   }, [bons, date]);
@@ -239,39 +243,48 @@ export default function CaissierPage() {
     const cash = dayBons.filter((b) =>
       ["payée", "partiellement_payée"].includes(b.status),
     );
-    const cashIn = cash.reduce((s, b) => {
-      const amt =
-        parseFloat(b.advancement || (b.status === "payée" ? b.total : 0)) || 0;
-      return s + amt;
-    }, 0);
+
+    // ✅ Use paidOnDate — amount actually paid on the selected date
+    const cashIn = cash.reduce(
+      (s, b) => s + parseFloat(b.paidOnDate || 0),
+      0,
+    );
+
     const paidFull = dayBons.filter((b) => b.status === "payée");
     const paidFullTotal = paidFull.reduce(
       (s, b) => s + parseFloat(b.total || 0),
       0,
     );
-    const partial = dayBons.filter((b) => b.status === "partiellement_payée");
+
+    const partial = dayBons.filter(
+      (b) => b.status === "partiellement_payée",
+    );
+
+    // ✅ Use paidOnDate for partial advancements
     const partialAdv = partial.reduce(
-      (s, b) => s + parseFloat(b.advancement || 0),
+      (s, b) => s + parseFloat(b.paidOnDate || 0),
       0,
     );
+
     const remaining = dayBons.reduce((s, b) => {
       if (["annulée", "payée"].includes(b.status)) return s;
       return s + parseFloat(b.remainingAmount || 0);
     }, 0);
+
     const grossTotal = dayBons.reduce(
       (s, b) => s + parseFloat(b.total || 0),
       0,
     );
 
-    // Payment method breakdown (cash received only)
+    // ✅ Payment method breakdown using paidOnDate
     const pmMap = {};
     dayBons.forEach((b) => {
       if (!["payée", "partiellement_payée"].includes(b.status)) return;
       const pm = b.paymentType || "non_paye";
-      const amt =
-        parseFloat(b.advancement || (b.status === "payée" ? b.total : 0)) || 0;
-      pmMap[pm] = (pmMap[pm] || 0) + amt;
+      const amt = parseFloat(b.paidOnDate || 0);
+      if (amt > 0) pmMap[pm] = (pmMap[pm] || 0) + amt;
     });
+
     const pmData = Object.entries(pmMap)
       .filter(([, v]) => v > 0)
       .map(([k, v]) => ({
@@ -281,7 +294,6 @@ export default function CaissierPage() {
       }))
       .sort((a, b) => b.amount - a.amount);
 
-    // By status count
     const byStatus = {};
     dayBons.forEach((b) => {
       byStatus[b.status] = (byStatus[b.status] || 0) + 1;
@@ -317,7 +329,6 @@ export default function CaissierPage() {
   return (
     <>
       <style>{`
-        /* ── Global ── */
         .caisse-page {
           font-family: 'DM Sans', 'Segoe UI', sans-serif;
           background: #f3f4f6;
@@ -325,8 +336,6 @@ export default function CaissierPage() {
           color: #1f2937;
           padding: 28px 32px;
         }
-
-        /* ── Header ── */
         .caisse-header {
           display: flex;
           align-items: flex-end;
@@ -335,7 +344,6 @@ export default function CaissierPage() {
           gap: 16px;
           margin-bottom: 28px;
         }
-        .caisse-header-left {}
         .caisse-brand {
           font-size: 11px;
           letter-spacing: 3px;
@@ -415,8 +423,6 @@ export default function CaissierPage() {
           letter-spacing: 1px;
           text-transform: uppercase;
         }
-
-        /* ── Date Banner ── */
         .caisse-date-banner {
           background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
           border: 1px solid #e5e7eb;
@@ -454,8 +460,6 @@ export default function CaissierPage() {
           font-size: 13px;
           font-weight: 600;
         }
-
-        /* ── Cash Hero ── */
         .caisse-cash-hero {
           background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #ffffff 100%);
           border: 1px solid rgba(5,150,105,.2);
@@ -525,8 +529,6 @@ export default function CaissierPage() {
           text-transform: uppercase;
           letter-spacing: 1px;
         }
-
-        /* ── Stat Cards ── */
         .caisse-stats-grid {
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -600,8 +602,6 @@ export default function CaissierPage() {
         }
         .caisse-trend.up { background: rgba(5,150,105,.1); color: #059669; }
         .caisse-trend.down { background: rgba(239,68,68,.1); color: #ef4444; }
-
-        /* ── Two-col layout ── */
         .caisse-two-col {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -611,8 +611,6 @@ export default function CaissierPage() {
         @media (max-width: 900px) {
           .caisse-two-col { grid-template-columns: 1fr; }
         }
-
-        /* ── Panel ── */
         .caisse-panel {
           background: #ffffff;
           border: 1px solid #e5e7eb;
@@ -636,9 +634,6 @@ export default function CaissierPage() {
         }
         .caisse-panel-title svg { color: #059669; }
         .caisse-panel-body { padding: 20px; }
-
-        /* ── Payment bar ── */
-        .caisse-payment-bar {}
         .caisse-bar-track {
           height: 10px;
           background: #f3f4f6;
@@ -672,8 +667,6 @@ export default function CaissierPage() {
           border-radius: 50%;
           flex-shrink: 0;
         }
-
-        /* ── Status grid ── */
         .caisse-status-grid {
           display: flex;
           flex-direction: column;
@@ -711,8 +704,6 @@ export default function CaissierPage() {
           min-width: 24px;
           text-align: right;
         }
-
-        /* ── Table ── */
         .caisse-table-panel {
           background: #ffffff;
           border: 1px solid #e5e7eb;
@@ -801,12 +792,7 @@ export default function CaissierPage() {
           font-weight: 600;
           white-space: nowrap;
         }
-        .caisse-pm-badge {
-          font-size: 12px;
-          color: #6b7280;
-        }
-
-        /* ── Empty ── */
+        .caisse-pm-badge { font-size: 12px; color: #6b7280; }
         .caisse-empty {
           text-align: center;
           padding: 48px 20px;
@@ -814,8 +800,6 @@ export default function CaissierPage() {
         }
         .caisse-empty-icon { font-size: 40px; margin-bottom: 12px; }
         .caisse-empty-text { font-size: 14px; }
-
-        /* ── Loading ── */
         .caisse-loading {
           display: flex;
           align-items: center;
@@ -833,8 +817,6 @@ export default function CaissierPage() {
           animation: spin .8s linear infinite;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* ── Especes highlight ── */
         .caisse-especes-row {
           display: flex;
           gap: 12px;
@@ -877,7 +859,6 @@ export default function CaissierPage() {
           color: rgba(5,150,105,.5);
           margin-left: 4px;
         }
-
         @media (max-width: 640px) {
           .caisse-page { padding: 16px; }
           .caisse-cash-amount { font-size: 32px; }
@@ -895,7 +876,9 @@ export default function CaissierPage() {
             </div>
           </div>
           <div className="caisse-header-right">
-            {isToday && <div className="caisse-today-badge">● Aujourd'hui</div>}
+            {isToday && (
+              <div className="caisse-today-badge">● Aujourd'hui</div>
+            )}
             <div className="caisse-date-pick">
               <FiCalendar size={16} />
               <input
@@ -1066,7 +1049,6 @@ export default function CaissierPage() {
 
             {/* ── Two-col panels ── */}
             <div className="caisse-two-col">
-              {/* Payment methods */}
               <div className="caisse-panel">
                 <div className="caisse-panel-header">
                   <div className="caisse-panel-title">
@@ -1087,7 +1069,6 @@ export default function CaissierPage() {
                 </div>
               </div>
 
-              {/* Status distribution */}
               <div className="caisse-panel">
                 <div className="caisse-panel-header">
                   <div className="caisse-panel-title">
@@ -1098,7 +1079,9 @@ export default function CaissierPage() {
                   {Object.keys(stats.byStatus).length === 0 ? (
                     <div className="caisse-empty">
                       <div className="caisse-empty-icon">📋</div>
-                      <div className="caisse-empty-text">Aucun bon ce jour</div>
+                      <div className="caisse-empty-text">
+                        Aucun bon ce jour
+                      </div>
                     </div>
                   ) : (
                     <div className="caisse-status-grid">
@@ -1115,13 +1098,14 @@ export default function CaissierPage() {
                               <div className="caisse-status-label">
                                 <span
                                   className="caisse-status-badge"
-                                  style={{ color: sm.color, background: sm.bg }}
+                                  style={{
+                                    color: sm.color,
+                                    background: sm.bg,
+                                  }}
                                 >
                                   {sm.icon}
                                 </span>
-                                <span
-                                  style={{ color: "#6b7280", fontSize: 12 }}
-                                >
+                                <span style={{ color: "#6b7280", fontSize: 12 }}>
                                   {sm.label}
                                 </span>
                               </div>
@@ -1184,7 +1168,7 @@ export default function CaissierPage() {
                         <th>Statut</th>
                         <th>Paiement</th>
                         <th>Total</th>
-                        <th>Avancé</th>
+                        <th>Encaissé (jour)</th>
                         <th>Reste</th>
                         <th>Date</th>
                       </tr>
@@ -1234,15 +1218,12 @@ export default function CaissierPage() {
                 <span style={{ color: "#6b7280" }}>
                   Encaissé :{" "}
                   <strong style={{ color: "#059669" }}>
+                    {/* ✅ Use paidOnDate for accurate daily total */}
                     {fmt(
-                      filtered.reduce((s, b) => {
-                        const amt =
-                          parseFloat(
-                            b.advancement ||
-                              (b.status === "payée" ? b.total : 0),
-                          ) || 0;
-                        return s + amt;
-                      }, 0),
+                      filtered.reduce(
+                        (s, b) => s + parseFloat(b.paidOnDate || 0),
+                        0,
+                      ),
                     )}{" "}
                     Dh
                   </strong>

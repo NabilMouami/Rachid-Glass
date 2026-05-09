@@ -834,11 +834,17 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           designation: item.designation || item.articleName || null,
         })),
         advancements: formData.advancements
-          .filter(adv => adv.amount > 0) // Only send advancements with amount > 0
+          .filter((adv) => adv.amount > 0) // Only send advancements with amount > 0
           .map((adv) => ({
-            id: typeof adv.id === 'number' && adv.id > 1000000000000 ? undefined : adv.id,
+            id:
+              typeof adv.id === "number" && adv.id > 1000000000000
+                ? undefined
+                : adv.id,
             amount: parseFloat(adv.amount) || 0,
-            paymentDate: adv.paymentDate instanceof Date ? adv.paymentDate.toISOString() : new Date(adv.paymentDate).toISOString(),
+            paymentDate:
+              adv.paymentDate instanceof Date
+                ? adv.paymentDate.toISOString()
+                : new Date(adv.paymentDate).toISOString(),
             paymentMethod: adv.paymentMethod || "espece",
             reference: adv.reference || "",
             notes: adv.notes || "",
@@ -1071,7 +1077,7 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   </table>
 
   <div class="totals">
-    <p><strong>Total:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
+    <p><strong>Net à payer:</strong> ${totalAfterDiscount.toFixed(2)} Dh</p>
     <p><strong>Total Mètre Lin:</strong> ${totalMetreLin.toFixed(2)} ML</p>
     <p><strong>Total Surface:</strong> ${totalSurface.toFixed(4)} m²</p>
   </div>
@@ -1230,18 +1236,24 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           const v2 = parseFloat(item.v2) || 0;
           const qty = parseFloat(item.quantity) || 0;
           const price = parseFloat(item.unitPrice) || 0;
-          
-          const ml = simple ? "-" : ((v1/100 + v2/100) * 2 * qty).toFixed(2);
-          const surf = simple ? "-" : (qty * (v1/100) * (v2/100)).toFixed(4);
-          const tot = simple ? (qty * price).toFixed(2) : (qty * (v1/100) * (v2/100) * price).toFixed(2);
+
+          const ml = simple
+            ? "-"
+            : ((v1 / 100 + v2 / 100) * 2 * qty).toFixed(2);
+          const surf = simple
+            ? "-"
+            : (qty * (v1 / 100) * (v2 / 100)).toFixed(4);
+          const tot = simple
+            ? (qty * price).toFixed(2)
+            : (qty * (v1 / 100) * (v2 / 100) * price).toFixed(2);
 
           return `
         <tr>
           <td>${item.produit?.reference || item.code || "-"}</td>
           <td>${item.produit?.designation || "-"}</td>
           <td>${qty.toFixed(2)}</td>
-          <td>${(v1 === 1 || v1 === 0) ? "-" : v1.toFixed(2)}</td>
-          <td>${(v2 === 1 || v2 === 0) ? "-" : v2.toFixed(2)}</td>
+          <td>${v1 === 1 || v1 === 0 ? "-" : v1.toFixed(2)}</td>
+          <td>${v2 === 1 || v2 === 0 ? "-" : v2.toFixed(2)}</td>
           <td>${ml}</td>
           <td>${surf}</td>
           <td>${price.toFixed(2)} Dh</td>
@@ -1945,38 +1957,30 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
 
                       {/* Longueur (v1) - Input */}
                       <td className="align-middle text-center">
-                        {parseFloat(item.v1) === 1 ? (
-                          <span className="text-primary fw-bold">-</span>
-                        ) : (
-                          <input
-                            type="number"
-                            className="form-control form-control-sm"
-                            value={item.v1}
-                            onChange={(e) =>
-                              handleItemChange(index, "v1", e.target.value)
-                            }
-                            min="0.01"
-                            step="0.01"
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={item.v1}
+                          onChange={(e) =>
+                            handleItemChange(index, "v1", e.target.value)
+                          }
+                          min="0.01"
+                          step="0.01"
+                        />
                       </td>
 
                       {/* Largeur (v2) - Input */}
                       <td className="align-middle text-center">
-                        {parseFloat(item.v2) === 1 ? (
-                          <span className="text-primary fw-bold">-</span>
-                        ) : (
-                          <input
-                            type="number"
-                            className="form-control form-control-sm"
-                            value={item.v2}
-                            onChange={(e) =>
-                              handleItemChange(index, "v2", e.target.value)
-                            }
-                            min="0.01"
-                            step="0.01"
-                          />
-                        )}
+                        <input
+                          type="number"
+                          className="form-control form-control-sm"
+                          value={item.v2}
+                          onChange={(e) =>
+                            handleItemChange(index, "v2", e.target.value)
+                          }
+                          min="0.01"
+                          step="0.01"
+                        />
                       </td>
 
                       {/* Mtre Lin. - Calculated: (v1/100 + v2/100) * 2 * qty */}

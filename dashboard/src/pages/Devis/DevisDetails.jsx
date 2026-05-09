@@ -1331,38 +1331,30 @@ const DevisDetailsPage = () => {
 
                     {/* Longueur - INPUT */}
                     <td>
-                      {parseFloat(item.v1) === 1 ? (
-                        <span className="text-primary fw-bold">-</span>
-                      ) : (
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v1}
-                          onChange={(e) =>
-                            handleItemChange(index, "v1", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
-                      )}
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={item.v1}
+                        onChange={(e) =>
+                          handleItemChange(index, "v1", e.target.value)
+                        }
+                        min="0.01"
+                        step="0.01"
+                      />
                     </td>
 
                     {/* Largeur - INPUT */}
                     <td>
-                      {parseFloat(item.v2) === 1 ? (
-                        <span className="text-primary fw-bold">-</span>
-                      ) : (
-                        <input
-                          type="number"
-                          className="form-control form-control-sm"
-                          value={item.v2}
-                          onChange={(e) =>
-                            handleItemChange(index, "v2", e.target.value)
-                          }
-                          min="0.01"
-                          step="0.01"
-                        />
-                      )}
+                      <input
+                        type="number"
+                        className="form-control form-control-sm"
+                        value={item.v2}
+                        onChange={(e) =>
+                          handleItemChange(index, "v2", e.target.value)
+                        }
+                        min="0.01"
+                        step="0.01"
+                      />
                     </td>
 
                     {/* prix/Unité - INPUT */}
