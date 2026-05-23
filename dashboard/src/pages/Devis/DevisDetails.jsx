@@ -38,7 +38,7 @@ const MySwal = withReactContent(Swal);
 // Function to round to next multiple of 3
 const roundToNextMultipleOfThree = (value) => {
   const numValue = parseFloat(value);
-  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (isNaN(numValue) || numValue < 3) return 3;
   if (numValue % 3 === 0) return numValue;
   return Math.ceil(numValue / 3) * 3;
 };
@@ -55,9 +55,9 @@ const calculateItemTotalPrice = (v1, v2, qty, price) => {
     return numQty * numPrice;
   }
 
-  // Otherwise use exact values
-  const calcV1 = numV1 / 100;
-  const calcV2 = numV2 / 100;
+  // Otherwise use the roundToNextMultipleOfThree formula
+  const calcV1 = roundToNextMultipleOfThree(numV1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(numV2) / 100;
   return numQty * calcV1 * calcV2 * numPrice;
 };
 
@@ -67,8 +67,8 @@ const calculateMetreLin = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = v1 / 100;
-  const calcV2 = v2 / 100;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
   const qty = parseFloat(item.quantity) || 0;
   return (calcV1 + calcV2) * 2 * qty;
 };
@@ -79,8 +79,8 @@ const calculateSurface = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = v1 / 100;
-  const calcV2 = v2 / 100;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
   const qty = parseFloat(item.quantity) || 0;
   return qty * calcV1 * calcV2;
 };
@@ -845,7 +845,6 @@ const DevisDetailsPage = () => {
         <th>Larg.</th>
         <th>Mtre Lin.</th>
         <th>Surface</th>
-        <th>Prix U</th>
         <th>Total</th>
       </tr>
     </thead>
@@ -857,9 +856,9 @@ const DevisDetailsPage = () => {
           const isSimpleCalc = v1 === 1 && v2 === 1;
           const qty = parseFloat(item.quantity) || 0;
 
-          // Calculate metre lin and surface with exact values
-          const calcV1 = v1 / 100;
-          const calcV2 = v2 / 100;
+          // Calculate metre lin and surface with rounded values
+          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
 
           return `
         <tr>
@@ -870,7 +869,6 @@ const DevisDetailsPage = () => {
           <td class="text-center">${(parseFloat(item.v2) || 1) === 1 ? "-" : item.v2 || 1}</td>
           <td class="text-center">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
           <td class="text-center">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
-          <td class="text-end">${formatAmount(item.unitPrice || 0)}</td>
           <td class="text-end">${formatAmount(item.totalPrice || 0)}</td>
         </tr>
       `;
@@ -966,7 +964,6 @@ const DevisDetailsPage = () => {
               <th style="border:1px solid #2c5aa0; padding:8px;">LARG.</th>
               <th style="border:1px solid #2c5aa0; padding:8px;">Mtre Lin.</th>
               <th style="border:1px solid #2c5aa0; padding:8px;">Surface</th>
-              <th style="border:1px solid #2c5aa0; padding:8px;">PRIX U</th>
               <th style="border:1px solid #2c5aa0; padding:8px;">TOTAL</th>
             </tr>
           </thead>
@@ -978,9 +975,9 @@ const DevisDetailsPage = () => {
                 const isSimpleCalc = v1 === 1 && v2 === 1;
                 const qty = parseFloat(item.quantity) || 0;
 
-                // Calculate metre lin and surface with exact values
-                const calcV1 = v1 / 100;
-                const calcV2 = v2 / 100;
+                // Calculate metre lin and surface with rounded values
+                const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+                const calcV2 = roundToNextMultipleOfThree(v2) / 100;
 
                 return `
                 <tr style="${index % 2 === 0 ? "background:#f9f9f9;" : ""}">
@@ -991,7 +988,6 @@ const DevisDetailsPage = () => {
                   <td style="border:1px solid #ddd; padding:6px; text-align:center;">${v2 === 1 ? "-" : item.v2 || 1}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:center;">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:center;">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
-                  <td style="border:1px solid #ddd; padding:6px; text-align:right;">${formatAmount(item.unitPrice || 0)}</td>
                   <td style="border:1px solid #ddd; padding:6px; text-align:right;">${formatAmount(item.totalPrice || 0)}</td>
                 </tr>
               `;

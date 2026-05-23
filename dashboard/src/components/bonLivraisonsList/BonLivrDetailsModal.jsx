@@ -34,7 +34,7 @@ const MySwal = withReactContent(Swal);
 // Function to round to next multiple of 3
 const roundToNextMultipleOfThree = (value) => {
   const numValue = parseFloat(value);
-  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (isNaN(numValue) || numValue < 3) return 3;
   if (numValue % 3 === 0) return numValue;
   return Math.ceil(numValue / 3) * 3;
 };
@@ -601,26 +601,26 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     return qty * calcV1 * calcV2 * price;
   };
 
-  // Calculate Metre Lin for an item: (v1/100 + v2/100) * 2 * qty (using exact values)
+  // Calculate Metre Lin for an item: (v1/100 + v2/100) * 2 * qty (using rounded values)
   const calculateMetreLin = (item) => {
     const v1 = parseFloat(item.v1) || 0;
     const v2 = parseFloat(item.v2) || 0;
     // Return 0 for simple calculations (v1=1 and v2=1)
     if (v1 === 1 && v2 === 1) return 0;
-    const calcV1 = v1 / 100;
-    const calcV2 = v2 / 100;
+    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
     const qty = parseFloat(item.quantity) || 0;
     return (calcV1 + calcV2) * 2 * qty;
   };
 
-  // Calculate Surface for an item: qty * (v1/100) * (v2/100) using exact values
+  // Calculate Surface for an item: qty * (v1/100) * (v2/100) using rounded values
   const calculateSurface = (item) => {
     const v1 = parseFloat(item.v1) || 0;
     const v2 = parseFloat(item.v2) || 0;
     // Return 0 for simple calculations (v1=1 and v2=1)
     if (v1 === 1 && v2 === 1) return 0;
-    const calcV1 = v1 / 100;
-    const calcV2 = v2 / 100;
+    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
     const qty = parseFloat(item.quantity) || 0;
     return qty * calcV1 * calcV2;
   };
@@ -1222,7 +1222,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         <th>Larg.</th>
         <th>Mtre Lin.</th>
         <th>Surface</th>
-        <th>Prix U.</th>
         <th>Total</th>
       </tr>
     </thead>
@@ -1236,16 +1235,14 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           const v2 = parseFloat(item.v2) || 0;
           const qty = parseFloat(item.quantity) || 0;
           const price = parseFloat(item.unitPrice) || 0;
+          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
 
-          const ml = simple
-            ? "-"
-            : ((v1 / 100 + v2 / 100) * 2 * qty).toFixed(2);
-          const surf = simple
-            ? "-"
-            : (qty * (v1 / 100) * (v2 / 100)).toFixed(4);
+          const ml = simple ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2);
+          const surf = simple ? "-" : (qty * calcV1 * calcV2).toFixed(4);
           const tot = simple
             ? (qty * price).toFixed(2)
-            : (qty * (v1 / 100) * (v2 / 100) * price).toFixed(2);
+            : (qty * calcV1 * calcV2 * price).toFixed(2);
 
           return `
         <tr>
@@ -1256,7 +1253,6 @@ const BonLivrDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
           <td>${v2 === 1 || v2 === 0 ? "-" : v2.toFixed(2)}</td>
           <td>${ml}</td>
           <td>${surf}</td>
-          <td>${price.toFixed(2)} Dh</td>
           <td>${tot} Dh</td>
         </tr>
       `;

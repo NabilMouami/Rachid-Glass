@@ -388,6 +388,7 @@ function ClientDetails() {
 
   // Handle document view
   const handleViewDocument = (doc) => {
+    if (!doc?.id) return;
     let route = "";
     switch (doc.document_type) {
       case "devis":
@@ -941,7 +942,7 @@ function ClientDetails() {
                                       <th>Quantité</th>
                                       <th>Prix Unitaire</th>
                                       <th>Total Ligne</th>
-                                      {/* <th>Actions</th> */}
+                                      <th>Actions</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1002,7 +1003,7 @@ function ClientDetails() {
                                               {formatCurrency(item.total_ligne)}
                                             </strong>
                                           </td>
-                                          {/* <td>
+                                          <td>
                                             <button
                                               className="btn btn-sm btn-outline-primary"
                                               onClick={() =>
@@ -1010,33 +1011,13 @@ function ClientDetails() {
                                                   id: item.document?.id,
                                                   document_type:
                                                     item.document_type,
-                                                  num_devis:
-                                                    item.document_type ===
-                                                    "devis"
-                                                      ? item.document?.num
-                                                      : undefined,
-                                                  num_bon_livraison:
-                                                    item.document_type ===
-                                                    "bon-livraison"
-                                                      ? item.document?.num
-                                                      : undefined,
-                                                  num_facture:
-                                                    item.document_type ===
-                                                    "facture"
-                                                      ? item.document?.num
-                                                      : undefined,
-                                                  date_creation:
-                                                    item.date_creation,
-                                                  status: item.document?.status,
-                                                  montant_ttc:
-                                                    item.document?.montant_ttc,
                                                 })
                                               }
                                               title="Voir le document"
                                             >
                                               <FiEye size={14} />
                                             </button>
-                                          </td> */}
+                                          </td>
                                         </tr>
                                       ),
                                     )}

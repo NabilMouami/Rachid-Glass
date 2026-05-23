@@ -33,7 +33,7 @@ const MySwal = withReactContent(Swal);
 // Function to round to next multiple of 3
 const roundToNextMultipleOfThree = (value) => {
   const numValue = parseFloat(value);
-  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (isNaN(numValue) || numValue < 3) return 3;
   if (numValue % 3 === 0) return numValue;
   return Math.ceil(numValue / 3) * 3;
 };
@@ -44,8 +44,8 @@ const calculateMetreLin = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = v1 / 100;
-  const calcV2 = v2 / 100;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
   const qty = parseFloat(item.quantity) || 0;
   return (calcV1 + calcV2) * 2 * qty;
 };
@@ -56,8 +56,8 @@ const calculateSurface = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = v1 / 100;
-  const calcV2 = v2 / 100;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
   const qty = parseFloat(item.quantity) || 0;
   return qty * calcV1 * calcV2;
 };
@@ -379,9 +379,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       return qty * price;
     }
 
-    // Otherwise use the exact values
-    const calcV1 = v1 / 100;
-    const calcV2 = v2 / 100;
+    // Otherwise use the roundToNextMultipleOfThree formula
+    const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(v2) / 100;
     return qty * calcV1 * calcV2 * price;
   };
 
@@ -843,9 +843,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       const isSimpleCalc = v1 === 1 && v2 === 1;
       const qty = parseFloat(ligne.quantity) || 0;
 
-      // Calculate metre lin and surface with exact values
-      const calcV1 = v1 / 100;
-      const calcV2 = v2 / 100;
+      // Calculate metre lin and surface with rounded values
+      const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+      const calcV2 = roundToNextMultipleOfThree(v2) / 100;
 
       return `
     <tr>
@@ -963,9 +963,9 @@ const DevisDetailsModal = ({ isOpen, toggle, devis, onUpdate }) => {
       const isSimpleCalc = v1 === 1 && v2 === 1;
       const qty = parseFloat(ligne.quantity) || 0;
 
-      // Calculate metre lin and surface with exact values
-      const calcV1 = v1 / 100;
-      const calcV2 = v2 / 100;
+      // Calculate metre lin and surface with rounded values
+      const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+      const calcV2 = roundToNextMultipleOfThree(v2) / 100;
 
       return `
       <tr style="${i % 2 === 0 ? "background:#f9f9f9;" : ""}">

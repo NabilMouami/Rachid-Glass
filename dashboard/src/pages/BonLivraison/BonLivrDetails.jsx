@@ -41,7 +41,7 @@ const MySwal = withReactContent(Swal);
 // Function to round to next multiple of 3
 const roundToNextMultipleOfThree = (value) => {
   const numValue = parseFloat(value);
-  if (isNaN(numValue) || numValue <= 0) return 1;
+  if (isNaN(numValue) || numValue < 3) return 3;
   if (numValue % 3 === 0) return numValue;
   return Math.ceil(numValue / 3) * 3;
 };
@@ -68,8 +68,8 @@ const calculateMetreLin = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = v1 / 100;
-  const calcV2 = v2 / 100;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
   const qty = parseFloat(item.quantity) || 0;
   return (calcV1 + calcV2) * 2 * qty;
 };
@@ -79,8 +79,8 @@ const calculateSurface = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   // Return 0 for simple calculations (v1=1 and v2=1)
   if (v1 === 1 && v2 === 1) return 0;
-  const calcV1 = v1 / 100;
-  const calcV2 = v2 / 100;
+  const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+  const calcV2 = roundToNextMultipleOfThree(v2) / 100;
   const qty = parseFloat(item.quantity) || 0;
   return qty * calcV1 * calcV2;
 };
@@ -905,7 +905,6 @@ const BonLivraisonDetailsPage = () => {
         <th>Larg.</th>
         <th>Mtre Lin.</th>
         <th>Surface</th>
-        <th>Prix U.</th>
         <th>Total</th>
       </tr>
     </thead>
@@ -920,15 +919,13 @@ const BonLivraisonDetailsPage = () => {
           const qty = parseFloat(item.quantity) || 0;
           const price = parseFloat(item.unitPrice) || 0;
 
-          const ml = simple
-            ? "-"
-            : ((v1 / 100 + v2 / 100) * 2 * qty).toFixed(2);
-          const surf = simple
-            ? "-"
-            : (qty * (v1 / 100) * (v2 / 100)).toFixed(4);
+          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
+          const ml = simple ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2);
+          const surf = simple ? "-" : (qty * calcV1 * calcV2).toFixed(4);
           const tot = simple
             ? (qty * price).toFixed(2)
-            : (qty * (v1 / 100) * (v2 / 100) * price).toFixed(2);
+            : (qty * calcV1 * calcV2 * price).toFixed(2);
 
           return `
         <tr>
@@ -939,7 +936,6 @@ const BonLivraisonDetailsPage = () => {
           <td>${v2 === 1 || v2 === 0 ? "-" : v2.toFixed(2)}</td>
           <td>${ml}</td>
           <td>${surf}</td>
-          <td>${price.toFixed(2)} Dh</td>
           <td>${tot} Dh</td>
         </tr>
       `;
@@ -1091,7 +1087,6 @@ const BonLivraisonDetailsPage = () => {
         <th>Larg.</th>
         <th>Mtre Lin.</th>
         <th>Surface</th>
-        <th>Prix U.</th>
         <th>Total</th>
       </tr>
     </thead>
@@ -1105,16 +1100,14 @@ const BonLivraisonDetailsPage = () => {
           const v2 = parseFloat(item.v2) || 0;
           const qty = parseFloat(item.quantity) || 0;
           const price = parseFloat(item.unitPrice) || 0;
+          const calcV1 = roundToNextMultipleOfThree(v1) / 100;
+          const calcV2 = roundToNextMultipleOfThree(v2) / 100;
 
-          const ml = simple
-            ? "-"
-            : ((v1 / 100 + v2 / 100) * 2 * qty).toFixed(2);
-          const surf = simple
-            ? "-"
-            : (qty * (v1 / 100) * (v2 / 100)).toFixed(4);
+          const ml = simple ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2);
+          const surf = simple ? "-" : (qty * calcV1 * calcV2).toFixed(4);
           const tot = simple
             ? (qty * price).toFixed(2)
-            : (qty * (v1 / 100) * (v2 / 100) * price).toFixed(2);
+            : (qty * calcV1 * calcV2 * price).toFixed(2);
 
           return `
         <tr>
@@ -1125,7 +1118,6 @@ const BonLivraisonDetailsPage = () => {
           <td>${v2 === 1 || v2 === 0 ? "-" : v2.toFixed(2)}</td>
           <td>${ml}</td>
           <td>${surf}</td>
-          <td>${price.toFixed(2)} Dh</td>
           <td>${tot} Dh</td>
         </tr>
       `;
@@ -1274,7 +1266,6 @@ const BonLivraisonDetailsPage = () => {
           Email: ibaghatrachid83@gmail.com
         </p>
         <p style="margin:2px 0;">TP: 56780736 — RC: 24001 — IF: 52433058 — CNSS: 2973747 — ICE: 003013206000054</p>
-        <p style="margin-top:6px;">Signature et cachet: _________________________</p>
       </div>
     `;
 
@@ -1351,7 +1342,6 @@ const BonLivraisonDetailsPage = () => {
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Larg.</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Mtre Lin.</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:center;">Surface</th>
-            <th style="border:1.5px solid #000; padding:6px; text-align:right;">Prix U</th>
             <th style="border:1.5px solid #000; padding:6px; text-align:right;">Total</th>
           </tr>
         </thead>
@@ -1380,7 +1370,6 @@ const BonLivraisonDetailsPage = () => {
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${v2 === 1 ? "-" : item.v2}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${isSimpleCalc ? "-" : ((calcV1 + calcV2) * 2 * qty).toFixed(2)}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:center;">${isSimpleCalc ? "-" : (qty * calcV1 * calcV2).toFixed(4)}</td>
-              <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(price)}</td>
               <td style="border:1.5px solid #000; padding:6px; text-align:right;">${formatAmount(total)}</td>
             </tr>
           `;
