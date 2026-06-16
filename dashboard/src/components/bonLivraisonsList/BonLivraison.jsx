@@ -110,11 +110,19 @@ const BonLivraisonTable = () => {
     paidBonsTotalAmount: 0,
   });
 
-  // Fetch data from YOUR API
+  // Fetch data from YOUR API whenever start/end date change
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const response = await axios.get(`${config_url}/api/bonlivraisons`);
+        const startDateStr = startDate ? format(startDate, "yyyy-MM-dd") : null;
+        const endDateStr = endDate ? format(endDate, "yyyy-MM-dd") : null;
+
+        const response = await axios.get(`${config_url}/api/bonlivraisons`, {
+          params: {
+            startDate: startDateStr,
+            endDate: endDateStr,
+          },
+        });
         const data = response.data;
         const formattedData = data.map((invoice) => {
           const total = parseFloat(invoice.total) || 0;
@@ -149,7 +157,7 @@ const BonLivraisonTable = () => {
       }
     };
     fetchBookings();
-  }, []);
+  }, [startDate, endDate]);
 
   // Calculate statistics
   const calculateStatistics = (data) => {
