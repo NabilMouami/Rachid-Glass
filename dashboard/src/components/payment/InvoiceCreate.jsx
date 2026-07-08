@@ -151,7 +151,7 @@ const FactureCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.surface}, Prix: ${produit.prix_vente} DH)`,
           },
         }));
 
@@ -230,7 +230,7 @@ const FactureCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.surface}, Prix: ${produit.prix_vente} DH)`,
           },
         }));
 
@@ -346,8 +346,7 @@ const FactureCreate = () => {
   const handleInputChange = (id, field, value) => {
     const updatedItems = items.map((item) => {
       if (item.id === id) {
-        const processedValue =
-          field === "product" ? value : parseFrenchNumber(value);
+             const processedValue = field === "product" ? value : parseFrenchNumber(value);
 
         const updatedItem = {
           ...item,
@@ -600,7 +599,9 @@ const FactureCreate = () => {
         invoiceNumber: invoiceNumber || "",
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
-        issueDate: startDate, // This includes both date and time
+        issueDate: startDate
+          ? startDate.toISOString()
+          : new Date().toISOString(),
         notes: invoiceNote,
         status: invoiceStatus,
         discountType: discountType,
@@ -791,15 +792,9 @@ const FactureCreate = () => {
         <div
           className={`text-sm ${isSelected ? "text-white" : "text-gray-600"}`}
         >
-          Stock: {produit.qty} | Prix: {produit.prix_vente} DH{priceRangeInfo}
+          Stock: {produit.surface} m²| Prix: {produit.prix_vente} DH
+          {priceRangeInfo}
         </div>
-        {produit.surface > 0 && (
-          <div
-            className={`text-xs ${isSelected ? "text-white" : "text-gray-500"}`}
-          >
-            Surface: {produit.surface} m²
-          </div>
-        )}
       </div>
     );
   };
@@ -1210,7 +1205,7 @@ const FactureCreate = () => {
                                           {option.label}
                                         </div>
                                         <div className="text-muted small">
-                                          Stock: {option.data.qty} | Prix:{" "}
+                                          Stock: {option.data.surface} m²| Prix:{" "}
                                           {option.data.prix_vente} DH
                                         </div>
                                       </div>
@@ -1255,23 +1250,17 @@ const FactureCreate = () => {
                             </div>
                           </td>
                           <td>
-                            <input
-                              type="number"
-                              name="qty"
-                              placeholder="Qty"
-                              className="form-control qty"
-                              style={{ minWidth: "60px", width: "80px" }}
-                              step="1"
-                              min="1"
-                              value={item.qty}
-                              onChange={(e) =>
-                                handleInputChange(
-                                  item.id,
-                                  "qty",
-                                  e.target.value,
-                                )
-                              }
-                            />
+                        <input
+  type="number"
+  name="qty"
+  placeholder="Qty"
+  className="form-control qty"
+  style={{ minWidth: "60px", width: "80px" }}
+  step="0.01"
+  min="0.01"
+  value={item.qty}
+  onChange={(e) => handleInputChange(item.id, "qty", e.target.value)}
+/>
                           </td>
                           <td>
                             <input
@@ -1293,7 +1282,11 @@ const FactureCreate = () => {
                               type="text"
                               className="form-control"
                               readOnly
-                              value={typeof item.total === 'number' ? item.total.toFixed(2) : parseFloat(item.total || 0).toFixed(2)}
+                              value={
+                                typeof item.total === "number"
+                                  ? item.total.toFixed(2)
+                                  : parseFloat(item.total || 0).toFixed(2)
+                              }
                             />
                             <small className="text-muted d-block">
                               {item.qty} × {item.price_unit}
@@ -1311,7 +1304,9 @@ const FactureCreate = () => {
                                   price_unit: item.price_unit || 1,
                                   total: parseFloat(item.price_unit) || 1,
                                 };
-                                const currentIndex = items.findIndex(i => i.id === item.id);
+                                const currentIndex = items.findIndex(
+                                  (i) => i.id === item.id,
+                                );
                                 const newItems = [...items];
                                 newItems.splice(currentIndex + 1, 0, newItem);
                                 setItems(newItems);
@@ -1396,9 +1391,7 @@ const FactureCreate = () => {
                       <p className="mb-1 text-danger">
                         -{discount.toFixed(2)} Dh
                       </p>
-                      <p className="mb-1">
-                        {totalHT.toFixed(2)} Dh
-                      </p>
+                      <p className="mb-1">{totalHT.toFixed(2)} Dh</p>
                       <p className="mb-1">20%</p>
                       <p className="mb-1 fw-bold">{totalTTC.toFixed(2)} Dh</p>
                       <p className="mb-1">{advancementPrice.toFixed(2)} Dh</p>

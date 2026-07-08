@@ -263,6 +263,8 @@ const FactureDetailsPage = () => {
 
     items: [],
     advancements: [],
+    ice: "",
+    ste: "",
   });
 
   // Fetch products
@@ -463,6 +465,8 @@ const FactureDetailsPage = () => {
 
         items: mappedItems,
         advancements: mappedAdvancements,
+        ice: data.ice || "",
+        ste: data.ste || "",
       });
     } catch (err) {
       console.error(err);
@@ -495,7 +499,7 @@ const FactureDetailsPage = () => {
 
   // Calculations
   const subTotal = formData.items.reduce((sum, item) => {
-    return sum + (item.quantity || 0) * (item.unitPrice || 0);
+    return sum + (item.totalPrice || 0);
   }, 0);
 
   const calculateDiscount = () => {
@@ -582,9 +586,11 @@ const FactureDetailsPage = () => {
       [field]: parseFloat(value) || 0,
     };
 
-    // Recalculate total - simple qty × unitPrice
+    // Recalculate total with v1/v2 factors
     const item = updatedItems[index];
-    updatedItems[index].totalPrice = item.quantity * item.unitPrice;
+    const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
+    const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
+    updatedItems[index].totalPrice = item.quantity * calcV1 * calcV2 * item.unitPrice;
 
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
@@ -691,6 +697,34 @@ const FactureDetailsPage = () => {
       margin-bottom: 20px;
     }
 
+    .client-name {
+      font-weight: 700;
+      font-size: 0.75rem;
+      margin-top: 2px;
+      display: inline-block;
+    }
+
+    .client-detail {
+      margin-top: 6px;
+      padding: 5px 10px;
+      background: #f4f7fb;
+      border-left: 3px solid #1a3a6e;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.7rem;
+      line-height: 1.5;
+    }
+
+    .client-detail-label {
+      font-weight: 800;
+      color: #1a3a6e;
+      letter-spacing: 0.5px;
+    }
+
+    .client-detail-value {
+      font-weight: 700;
+      color: #000;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -764,7 +798,9 @@ const FactureDetailsPage = () => {
   <div class="info">
     <div>
       <strong>Client :</strong><br/>
-      ${formData.customerName}<br/>
+      <span class="client-name">${formData.customerName}</span><br/>
+      ${formData.ice ? `<div class="client-detail"><span class="client-detail-label">ICE :</span> <span class="client-detail-value">${formData.ice}</span></div>` : ""}
+      ${formData.ste ? `<div class="client-detail"><span class="client-detail-label">STE :</span> <span class="client-detail-value">${formData.ste}</span></div>` : ""}
     </div>
      <div style="text-align:right;">
       <strong>N° Facture :</strong> ${facture.invoiceNumber}<br/>

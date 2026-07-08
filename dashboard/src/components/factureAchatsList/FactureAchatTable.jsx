@@ -16,11 +16,7 @@ import {
 } from "react-icons/fi";
 import { config_url } from "@/utils/config";
 import Swal from "sweetalert2";
-import {
-  Card,
-  CardBody,
-  Badge,
-} from "reactstrap";
+import { Card, CardBody, Badge } from "reactstrap";
 import withReactContent from "sweetalert2-react-content";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -311,9 +307,16 @@ const FactureAchatTable = () => {
       });
 
       if (result.isConfirmed) {
-        await axios.delete(`${config_url}/api/facture-achat/${id}`);
-        topTost("success", "Facture supprimée avec succès");
-        fetchFactures();
+        const response = await axios.delete(
+          `${config_url}/api/factures-achat/${id}`,
+        );
+        if (response.data.success) {
+          topTost(
+            "Facture supprimée avec succès et surfaces restaurées",
+            "success",
+          );
+          fetchFactures();
+        }
       }
     } catch (error) {
       console.error("Error deleting invoice:", error);

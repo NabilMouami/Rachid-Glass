@@ -78,12 +78,12 @@ const calculateItemTotal = (item) => {
   const v2 = parseFloat(item.v2) || 0;
   const qty = parseFloat(item.qty) || 0;
   const price = parseFloat(item.price_unit) || 0;
-  
+
   // If both v1 and v2 are 1, calculate as simple: qty * price
   if (v1 === 1 && v2 === 1) {
     return qty * price;
   }
-  
+
   // Otherwise use the roundToNextMultipleOfThree formula
   const calcV1 = roundToNextMultipleOfThree(v1) / 100;
   const calcV2 = roundToNextMultipleOfThree(v2) / 100;
@@ -141,7 +141,7 @@ const BonLivrCreate = () => {
   const handleAddRowBelow = (e, currentItemId) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const currentIndex = items.findIndex(item => item.id === currentItemId);
+      const currentIndex = items.findIndex((item) => item.id === currentItemId);
       if (currentIndex !== -1) {
         // Create new item after current
         const newItem = {
@@ -157,7 +157,7 @@ const BonLivrCreate = () => {
         const newItems = [...items];
         newItems.splice(currentIndex + 1, 0, newItem);
         setItems(newItems);
-        
+
         // Focus on the new row's product select after render
         setTimeout(() => {
           const selectRef = selectRefs.current[newItem.id];
@@ -214,7 +214,7 @@ const BonLivrCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.surface}, Prix: ${produit.prix_vente} DH)`,
           },
         }));
 
@@ -299,7 +299,7 @@ const BonLivrCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix: ${produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.surface}, Prix: ${produit.prix_vente} DH)`,
           },
         }));
 
@@ -835,15 +835,9 @@ const BonLivrCreate = () => {
         <div
           className={`text-sm ${isSelected ? "text-white" : "text-gray-600"}`}
         >
-          Stock: {produit.qty} | Prix: {produit.prix_vente} DH{priceRangeInfo}
+          Stock: {produit.surface} m²| Prix: {produit.prix_vente} DH
+          {priceRangeInfo}
         </div>
-        {produit.surface > 0 && (
-          <div
-            className={`text-xs ${isSelected ? "text-white" : "text-gray-500"}`}
-          >
-            Surface: {produit.surface} m²
-          </div>
-        )}
       </div>
     );
   };
@@ -1242,7 +1236,7 @@ const BonLivrCreate = () => {
                                           {option.label}
                                         </div>
                                         <div className="text-muted small">
-                                          Stock: {option.data.qty} | Prix:{" "}
+                                          Stock: {option.data.surface} m²| Prix:{" "}
                                           {option.data.prix_vente} DH
                                         </div>
                                       </div>
@@ -1355,10 +1349,15 @@ const BonLivrCreate = () => {
                               type="text"
                               className="form-control"
                               readOnly
-                              value={typeof item.total === 'number' ? item.total.toFixed(2) : parseFloat(item.total || 0).toFixed(2)}
+                              value={
+                                typeof item.total === "number"
+                                  ? item.total.toFixed(2)
+                                  : parseFloat(item.total || 0).toFixed(2)
+                              }
                             />
                             <small className="text-muted d-block">
-                              {item.qty} × {calcV1} × {calcV2} × {item.price_unit}
+                              {item.qty} × {calcV1} × {calcV2} ×{" "}
+                              {item.price_unit}
                             </small>
                           </td>
                           <td className="text-center">
@@ -1375,7 +1374,9 @@ const BonLivrCreate = () => {
                                   price_unit: item.price_unit || 1,
                                   total: parseFloat(item.price_unit) || 1,
                                 };
-                                const currentIndex = items.findIndex(i => i.id === item.id);
+                                const currentIndex = items.findIndex(
+                                  (i) => i.id === item.id,
+                                );
                                 const newItems = [...items];
                                 newItems.splice(currentIndex + 1, 0, newItem);
                                 setItems(newItems);

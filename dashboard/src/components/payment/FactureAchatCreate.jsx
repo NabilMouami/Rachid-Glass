@@ -141,7 +141,7 @@ const FactureAchatCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix Achat: ${produit.prix_achat || produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.surface}, Prix Achat: ${produit.prix_achat || produit.prix_vente} DH)`,
           },
         }));
 
@@ -217,7 +217,7 @@ const FactureAchatCreate = () => {
           label: `${produit.reference} - ${produit.designation}`,
           data: {
             ...produit,
-            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.qty}, Prix Achat: ${produit.prix_achat || produit.prix_vente} DH)`,
+            displayText: `${produit.reference} - ${produit.designation} (Stock: ${produit.surface}, Prix Achat: ${produit.prix_achat || produit.prix_vente} DH)`,
           },
         }));
 
@@ -534,8 +534,10 @@ const FactureAchatCreate = () => {
         fornisseurId: selectedSupplierId || null,
         supplierName: supplierName.trim(),
         supplierPhone: supplierPhone.trim(),
-        issueDate: startDate,
-        dueDate: dueDate,
+        issueDate: startDate
+          ? startDate.toISOString()
+          : new Date().toISOString(),
+        dueDate: dueDate ? dueDate.toISOString() : null,
         notes: invoiceNote,
         status: invoiceStatus,
         discountType: discountType,
@@ -681,7 +683,7 @@ const FactureAchatCreate = () => {
         <div
           className={`text-sm ${isSelected ? "text-white" : "text-gray-600"}`}
         >
-          Stock: {produit.qty} | Prix Achat:{" "}
+          Stock: {produit.surface} m² | Prix Achat:{" "}
           {produit.prix_achat || produit.prix_vente} DH{priceRangeInfo}
         </div>
       </div>

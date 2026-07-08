@@ -364,11 +364,19 @@ const FactureAchatsDetailsPage = () => {
           }))
         : [];
 
+      const parsedIssueDate = data.issueDate
+        ? new Date(data.issueDate)
+        : new Date();
+      console.log("📅 Issue Date from backend (issue_date):", {
+        raw: data.issueDate,
+        parsed: parsedIssueDate,
+      });
+
       setFormData({
         supplierName: data.supplierName || "",
         supplierPhone: data.supplierPhone || "",
         supplierEmail: data.supplierEmail || "",
-        issueDate: data.issueDate ? new Date(data.issueDate) : new Date(),
+        issueDate: parsedIssueDate,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
         notes: data.notes || "",
         status: data.status || "brouillon",

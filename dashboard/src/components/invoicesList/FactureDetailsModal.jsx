@@ -245,6 +245,25 @@ const buildInvoiceHTML = ({
       background: linear-gradient(135deg, #eef3fb 0%, #dce8f8 100%);
       border-color: #2c5aa0;
     }
+    .client-id-row {
+      margin-top: 5px;
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.7);
+      border-left: 3px solid #1a3a6e;
+      border-radius: 0 4px 4px 0;
+      font-size: 9.5px;
+      line-height: 1.5;
+    }
+    .client-id-label {
+      font-weight: 800;
+      color: #1a3a6e;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .client-id-value {
+      font-weight: 700;
+      color: #2a2a3e;
+    }
 
     /* ── Items Table ── */
     .section-label {
@@ -427,8 +446,8 @@ const buildInvoiceHTML = ({
     <div class="info-card highlight">
       <div class="info-card-title">Client</div>
       <p><strong>${formData.customerName || "—"}</strong></p>
-      ${formData.ice ? `<p>ICE : ${formData.ice}</p>` : ""}
-      ${formData.ste ? `<p>Ste : ${formData.ste}</p>` : ""}
+      ${formData.ice ? `<p class="client-id-row"><span class="client-id-label">ICE :</span> <span class="client-id-value">${formData.ice}</span></p>` : ""}
+      ${formData.ste ? `<p class="client-id-row"><span class="client-id-label">STE :</span> <span class="client-id-value">${formData.ste}</span></p>` : ""}
     </div>
     <!-- Invoice Meta -->
     <div class="info-card">
@@ -1305,6 +1324,34 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
       margin-bottom: 20px;
     }
 
+    .client-name {
+      font-weight: 700;
+      font-size: 0.75rem;
+      margin-top: 2px;
+      display: inline-block;
+    }
+
+    .client-detail {
+      margin-top: 6px;
+      padding: 5px 10px;
+      background: #f4f7fb;
+      border-left: 3px solid #1a3a6e;
+      border-radius: 0 4px 4px 0;
+      font-size: 0.7rem;
+      line-height: 1.5;
+    }
+
+    .client-detail-label {
+      font-weight: 800;
+      color: #1a3a6e;
+      letter-spacing: 0.5px;
+    }
+
+    .client-detail-value {
+      font-weight: 700;
+      color: #000;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -1378,7 +1425,9 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
   <div class="info">
     <div>
       <strong>Client :</strong><br/>
-      ${formData.customerName}<br/>
+      <span class="client-name">${formData.customerName}</span><br/>
+      ${formData.ice ? `<div class="client-detail"><span class="client-detail-label">ICE :</span> <span class="client-detail-value">${formData.ice}</span></div>` : ""}
+      ${formData.ste ? `<div class="client-detail"><span class="client-detail-label">STE :</span> <span class="client-detail-value">${formData.ste}</span></div>` : ""}
     </div>
      <div style="text-align:right;">
       <strong>N° Facture :</strong> ${invoice.invoiceNumber}<br/>

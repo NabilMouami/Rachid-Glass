@@ -1,7 +1,7 @@
 import { useState } from "react";
 
-const useDatePicker = () => {
-    const [startDate, setStartDate] = useState(null);
+const useDatePicker = (initialDate = null) => {
+    const [startDate, setStartDate] = useState(initialDate);
     const [endDate, setEndDate] = useState(null);
 
     const handleSelectToday = (type) => {
