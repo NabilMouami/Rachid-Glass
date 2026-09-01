@@ -782,10 +782,10 @@ const FactureAchatsDetailsPage = () => {
     <div>TVA (${formData.tvaRate}%) : ${formatAmount(tvaAmount)} DH</div>
     <div class="net-box">
       <span>Net TTC à payer</span>
-      <span>${formatAmount(totalTTC)} DH</span>
+      <span>${formatAmount(totalTTC.toFixed(0))} DH</span>
     </div>
     <div class="italic">
-      ${totalToFrenchText(totalTTC)}
+      ${totalToFrenchText(totalTTC.toFixed(0))}
     </div>
   </div>
 
@@ -1404,11 +1404,11 @@ const FactureAchatsDetailsPage = () => {
               <div className="d-flex justify-content-between mb-2 fw-bold border-top pt-2">
                 <span>NET TTC À PAYER:</span>
                 <span className="text-primary fs-5">
-                  {formatAmount(totalTTC)} Dh
+                  {formatAmount(totalTTC.toFixed(0))} Dh
                 </span>
               </div>
               <div className="mt-3 small fst-italic">
-                <strong>{totalToFrenchText(totalTTC)}</strong>
+                <strong>{totalToFrenchText(totalTTC.toFixed(0))}</strong>
               </div>
             </div>
           </Col>

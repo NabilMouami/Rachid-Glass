@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-import { format, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
   FiTrendingUp,
   FiDollarSign,
-  FiClock,
   FiCheckCircle,
-  FiAlertCircle,
   FiCalendar,
   FiRefreshCw,
-  FiChevronDown,
   FiArrowUpRight,
   FiArrowDownRight,
   FiList,
@@ -210,27 +207,8 @@ export default function CaissierPage() {
       .finally(() => setLoading(false));
   }, [refreshKey, date]);
 
-  // Filter by selected date (createdAt OR paymentDate OR advancements)
-  const dayBons = useMemo(() => {
-    const d = new Date(date);
-    const start = startOfDay(d).getTime();
-    const end = endOfDay(d).getTime();
-    return bons.filter((b) => {
-      const createdTime = new Date(b.createdAt).getTime();
-      if (createdTime >= start && createdTime <= end) return true;
-
-      if (b.paymentDate) {
-        const paymentTime = new Date(b.paymentDate).getTime();
-        if (!isNaN(paymentTime) && paymentTime >= start && paymentTime <= end)
-          return true;
-      }
-
-      // ✅ Also keep if it has advancements on this date (already filtered by backend)
-      if (b.advancements && b.advancements.length > 0) return true;
-
-      return false;
-    });
-  }, [bons, date]);
+  // API already filters by startDate/endDate — trust backend to avoid timezone double-filter bugs
+  const dayBons = bons;
 
   // Apply status filter
   const filtered = useMemo(() => {
@@ -240,31 +218,22 @@ export default function CaissierPage() {
 
   // ── Statistics ────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const cash = dayBons.filter((b) =>
-      ["payée", "partiellement_payée"].includes(b.status),
-    );
+    const paidOn = (b) => parseFloat(b.paidOnDate || 0);
 
-    // ✅ Use paidOnDate — amount actually paid on the selected date
-    const cashIn = cash.reduce(
-      (s, b) => s + parseFloat(b.paidOnDate || 0),
-      0,
-    );
+    // Sum only amounts collected on the selected date (from backend paidOnDate)
+    const cashIn = dayBons.reduce((s, b) => s + paidOn(b), 0);
 
-    const paidFull = dayBons.filter((b) => b.status === "payée");
-    const paidFullTotal = paidFull.reduce(
-      (s, b) => s + parseFloat(b.total || 0),
-      0,
+    const paidFull = dayBons.filter(
+      (b) => paidOn(b) > 0 && paidOn(b) >= parseFloat(b.total || 0) - 0.01,
     );
+    const paidFullTotal = paidFull.reduce((s, b) => s + paidOn(b), 0);
 
     const partial = dayBons.filter(
-      (b) => b.status === "partiellement_payée",
+      (b) =>
+        paidOn(b) > 0 && paidOn(b) < parseFloat(b.total || 0) - 0.01,
     );
 
-    // ✅ Use paidOnDate for partial advancements
-    const partialAdv = partial.reduce(
-      (s, b) => s + parseFloat(b.paidOnDate || 0),
-      0,
-    );
+    const partialAdv = partial.reduce((s, b) => s + paidOn(b), 0);
 
     const remaining = dayBons.reduce((s, b) => {
       if (["annulée", "payée"].includes(b.status)) return s;
@@ -276,13 +245,24 @@ export default function CaissierPage() {
       0,
     );
 
-    // ✅ Payment method breakdown using paidOnDate
+    // ✅ Payment method breakdown using advancements when available
     const pmMap = {};
     dayBons.forEach((b) => {
       if (!["payée", "partiellement_payée"].includes(b.status)) return;
-      const pm = b.paymentType || "non_paye";
-      const amt = parseFloat(b.paidOnDate || 0);
-      if (amt > 0) pmMap[pm] = (pmMap[pm] || 0) + amt;
+
+      if (b.advancements && b.advancements.length > 0) {
+        // Use advancement-level paymentMethod for accurate breakdown
+        b.advancements.forEach((adv) => {
+          const pm = adv.paymentMethod || "non_paye";
+          const amt = parseFloat(adv.amount || 0);
+          if (amt > 0) pmMap[pm] = (pmMap[pm] || 0) + amt;
+        });
+      } else {
+        // No advancements — use bon-level paymentType with paidOnDate
+        const pm = b.paymentType || "non_paye";
+        const amt = parseFloat(b.paidOnDate || 0);
+        if (amt > 0) pmMap[pm] = (pmMap[pm] || 0) + amt;
+      }
     });
 
     const pmData = Object.entries(pmMap)

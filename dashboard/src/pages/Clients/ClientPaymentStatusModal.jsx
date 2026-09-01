@@ -83,7 +83,45 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
       minimumFractionDigits: 2,
     }).format(num);
   };
+  
+  const parseAmount = (value) => {
+    const amount = parseFloat(value);
+    return Number.isFinite(amount) ? amount : 0;
+  };
+  
+  const getPaidAmount = (doc) => {
+    const montantTTC = parseAmount(doc.montantTTC);
+    const totalPaid = parseAmount(doc.totalPaid);
+    const totalRemaining = parseAmount(doc.totalRemaining);
 
+    if (doc.paymentStatus === "payée") {
+      return montantTTC;
+    }
+
+    if (doc.paymentStatus === "partiellement_payée") {
+      if (totalPaid > 0) return totalPaid;
+      if (totalRemaining > 0) return Math.max(0, montantTTC - totalRemaining);
+      return 0;
+    }
+
+    return totalPaid;
+  };
+
+  const getRemainingAmount = (doc) => {
+    const montantTTC = parseAmount(doc.montantTTC);
+    const totalRemaining = parseAmount(doc.totalRemaining);
+
+    if (doc.paymentStatus === "payée") {
+      return 0;
+    }
+
+    if (totalRemaining > 0) {
+      return totalRemaining;
+    }
+
+    return Math.max(0, montantTTC - getPaidAmount(doc));
+  };
+  
   // Get status color
   const getStatusColor = (status) => {
     const colors = {
@@ -505,31 +543,10 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                             <h6 className="text-muted mb-1">Déjà Payé BL</h6>
                             <h3 className="mb-0">
                               {formatCurrency(
-                                bonLivraisonsOnly.reduce((sum, doc) => {
-                                  let paidAmount = 0;
-                                  const montantTTC =
-                                    parseFloat(doc.montantTTC) || 0;
-
-                                  // Calculate paid amount based on status
-                                  if (doc.paymentStatus === "payée") {
-                                    paidAmount = montantTTC;
-                                  } else if (
-                                    doc.paymentStatus === "partiellement_payée"
-                                  ) {
-                                    // Use totalPaid if available, otherwise calculate based on your logic
-                                    paidAmount =
-                                      parseFloat(doc.totalPaid) ||
-                                      montantTTC * 0.5; // Example: 50% for partially paid
-                                  } else if (
-                                    doc.paymentStatus === "brouillon"
-                                  ) {
-                                    paidAmount = 0;
-                                  } else {
-                                    paidAmount = parseFloat(doc.totalPaid) || 0;
-                                  }
-
-                                  return sum + paidAmount;
-                                }, 0),
+                                bonLivraisonsOnly.reduce(
+                                  (sum, doc) => sum + getPaidAmount(doc),
+                                  0,
+                                ),
                               )}
                             </h3>
                           </div>
@@ -551,32 +568,10 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                             </h6>
                             <h3 className="mb-0">
                               {formatCurrency(
-                                bonLivraisonsOnly.reduce((sum, doc) => {
-                                  const montantTTC =
-                                    parseFloat(doc.montantTTC) || 0;
-                                  let paidAmount = 0;
-
-                                  // Calculate paid amount based on status (same logic as above)
-                                  if (doc.paymentStatus === "payée") {
-                                    paidAmount = montantTTC;
-                                  } else if (
-                                    doc.paymentStatus === "partiellement_payée"
-                                  ) {
-                                    paidAmount =
-                                      parseFloat(doc.totalPaid) ||
-                                      montantTTC * 0.5;
-                                  } else if (
-                                    doc.paymentStatus === "brouillon"
-                                  ) {
-                                    paidAmount = 0;
-                                  } else {
-                                    paidAmount = parseFloat(doc.totalPaid) || 0;
-                                  }
-
-                                  const remainingAmount =
-                                    montantTTC - paidAmount;
-                                  return sum + Math.max(0, remainingAmount);
-                                }, 0),
+                                bonLivraisonsOnly.reduce(
+                                  (sum, doc) => sum + getRemainingAmount(doc),
+                                  0,
+                                ),
                               )}
                             </h3>
                           </div>
@@ -658,12 +653,13 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                     </td>
                                     <td>
                                       <span className="text-success">
-                                        {formatCurrency(doc.totalPaid)}
+                                        {formatCurrency(getPaidAmount(doc))}
                                       </span>
                                       {doc.montantTTC > 0 && (
                                         <div className="small text-muted">
                                           {Math.round(
-                                            (doc.totalPaid / doc.montantTTC) *
+                                            (getPaidAmount(doc) /
+                                              parseAmount(doc.montantTTC)) *
                                               100,
                                           )}
                                           %
@@ -672,7 +668,7 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                     </td>
                                     <td>
                                       <span className="text-danger fw-bold">
-                                        {formatCurrency(doc.totalRemaining)}
+                                        {formatCurrency(getRemainingAmount(doc))}
                                       </span>
                                     </td>
                                     <td>
@@ -712,66 +708,21 @@ function ClientPaymentStatusModal({ clientId, clientName, onClose }) {
                                   <td>
                                     <strong className="text-success">
                                       {formatCurrency(
-                                        bonLivraisonsOnly.reduce((sum, doc) => {
-                                          let paidAmount = 0;
-                                          const montantTTC =
-                                            parseFloat(doc.montantTTC) || 0;
-
-                                          if (doc.paymentStatus === "payée") {
-                                            paidAmount = montantTTC;
-                                          } else if (
-                                            doc.paymentStatus ===
-                                            "partiellement_payée"
-                                          ) {
-                                            paidAmount =
-                                              parseFloat(doc.totalPaid) ||
-                                              montantTTC * 0.5;
-                                          } else if (
-                                            doc.paymentStatus === "brouillon"
-                                          ) {
-                                            paidAmount = 0;
-                                          } else {
-                                            paidAmount =
-                                              parseFloat(doc.totalPaid) || 0;
-                                          }
-
-                                          return sum + paidAmount;
-                                        }, 0),
+                                        bonLivraisonsOnly.reduce(
+                                          (sum, doc) => sum + getPaidAmount(doc),
+                                          0,
+                                        ),
                                       )}
                                     </strong>
                                   </td>
                                   <td>
                                     <strong className="text-danger">
                                       {formatCurrency(
-                                        bonLivraisonsOnly.reduce((sum, doc) => {
-                                          const montantTTC =
-                                            parseFloat(doc.montantTTC) || 0;
-                                          let paidAmount = 0;
-
-                                          if (doc.paymentStatus === "payée") {
-                                            paidAmount = montantTTC;
-                                          } else if (
-                                            doc.paymentStatus ===
-                                            "partiellement_payée"
-                                          ) {
-                                            paidAmount =
-                                              parseFloat(doc.totalPaid) ||
-                                              montantTTC * 0.5;
-                                          } else if (
-                                            doc.paymentStatus === "brouillon"
-                                          ) {
-                                            paidAmount = 0;
-                                          } else {
-                                            paidAmount =
-                                              parseFloat(doc.totalPaid) || 0;
-                                          }
-
-                                          const remainingAmount =
-                                            montantTTC - paidAmount;
-                                          return (
-                                            sum + Math.max(0, remainingAmount)
-                                          );
-                                        }, 0),
+                                        bonLivraisonsOnly.reduce(
+                                          (sum, doc) =>
+                                            sum + getRemainingAmount(doc),
+                                          0,
+                                        ),
                                       )}
                                     </strong>
                                   </td>

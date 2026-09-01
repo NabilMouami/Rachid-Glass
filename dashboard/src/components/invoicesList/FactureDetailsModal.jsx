@@ -1468,18 +1468,18 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
     <div>TVA (${formData.tvaRate || 20}%) :</div>
     <div class="net-box">
       <span>Net TTC à payer</span>
-      <span>${formatAmount(totalTTC)} DH</span>
+      <span>${formatAmount(totalTTC.toFixed(0))} DH</span>
     </div>
     ${
       totalAdvancement > 0
         ? `
-      <div>Avancements : -${formatAmount(totalAdvancement)} DH</div>
-      <div>Reste à payer : ${formatAmount(remainingAmount)} DH</div>
+      <div>Avancements : -${formatAmount(totalAdvancement.toFixed(0))} DH</div>
+      <div>Reste à payer : ${formatAmount(remainingAmount.toFixed(0))} DH</div>
     `
         : ""
     }
     <div class="italic">
-      ${totalToFrenchText(totalTTC)}
+      ${totalToFrenchText(totalTTC.toFixed(0))}
     </div>
   </div>
 
@@ -2265,14 +2265,6 @@ const FactureDetailsModal = ({ isOpen, toggle, invoice, onUpdate }) => {
         >
           <FiDownload className="me-2" />
           Télécharger PDF
-        </button>
-        <button
-          className="btn btn-outline-success"
-          onClick={handleUploadInvoicePdf}
-          disabled={isUploadingPdf}
-        >
-          <FiSave className="me-2" />
-          {isUploadingPdf ? "Upload..." : "Uploader PDF"}
         </button>
         <Button onClick={handlePrint} color="outline-primary">
           <FiPrinter className="me-2" />

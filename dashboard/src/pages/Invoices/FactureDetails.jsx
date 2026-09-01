@@ -590,7 +590,8 @@ const FactureDetailsPage = () => {
     const item = updatedItems[index];
     const calcV1 = roundToNextMultipleOfThree(item.v1) / 100;
     const calcV2 = roundToNextMultipleOfThree(item.v2) / 100;
-    updatedItems[index].totalPrice = item.quantity * calcV1 * calcV2 * item.unitPrice;
+    updatedItems[index].totalPrice =
+      item.quantity * calcV1 * calcV2 * item.unitPrice;
 
     setFormData((prev) => ({ ...prev, items: updatedItems }));
   };
@@ -841,18 +842,18 @@ const FactureDetailsPage = () => {
     <div>TVA (${tvaRate}%) :</div>
     <div class="net-box">
       <span>Net TTC à payer</span>
-      <span>${formatAmount(totalTTC)} DH</span>
+      <span>${formatAmount(totalTTC.toFixed(0))} DH</span>
     </div>
     ${
       totalAdvancement > 0
         ? `
-      <div>Avancements : -${formatAmount(totalAdvancement)} DH</div>
-      <div>Reste à payer : ${formatAmount(remainingAmount)} DH</div>
+      <div>Avancements : -${formatAmount(totalAdvancement.toFixed(0))} DH</div>
+      <div>Reste à payer : ${formatAmount(remainingAmount.toFixed(0))} DH</div>
     `
         : ""
     }
     <div class="italic">
-      ${totalToFrenchText(totalTTC)}
+      ${totalToFrenchText(totalTTC.toFixed(0))}
     </div>
   </div>
 
@@ -1472,7 +1473,7 @@ const FactureDetailsPage = () => {
                     remainingAmount > 0 ? "text-danger" : "text-success"
                   }
                 >
-                  {formatAmount(remainingAmount)} Dh
+                  {formatAmount(remainingAmount.toFixed(0))} Dh
                 </span>
               </div>
             </div>

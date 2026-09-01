@@ -38,6 +38,16 @@ const statusOptions = [
   { value: "en_attente", label: "En Attente" },
 ];
 
+const paymentTypeOptions = [
+  { value: "all", label: "Tous les paiements" },
+  { value: "espece", label: "Espèce" },
+  { value: "cheque", label: "Chèque" },
+  { value: "virement", label: "Virement Bancaire" },
+  { value: "carte", label: "Carte Bancaire" },
+  { value: "multiple", label: "Paiement Multiple" },
+  { value: "non_paye", label: "Non Payé" },
+];
+
 // Helper to format numbers safely
 const safeToFixed = (value, decimals = 2) => {
   if (typeof value !== "number" || isNaN(value) || !isFinite(value)) {
@@ -79,6 +89,7 @@ const BonLivraisonTable = () => {
   const [bookings, setBookings] = useState([]);
   const [filteredBookings, setFilteredBookings] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedPaymentType, setSelectedPaymentType] = useState("all");
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [advancementPrice, setAdvancementPrice] = useState(0);
@@ -139,6 +150,7 @@ const BonLivraisonTable = () => {
             advancement,
             remainingAmount,
             status: invoice.status,
+            paymentType: invoice.paymentType || "non_paye",
             createdAt: new Date(invoice.createdAt),
             createdAtString: formatDateTime(new Date(invoice.createdAt)),
             // Keep original data for modal
@@ -272,6 +284,10 @@ const BonLivraisonTable = () => {
       result = result.filter((bon) => bon.status === selectedStatus);
     }
 
+    if (selectedPaymentType !== "all") {
+      result = result.filter((bon) => bon.paymentType === selectedPaymentType);
+    }
+
     // Filter by date range
     if (startDate && endDate) {
       const start = new Date(startDate);
@@ -287,7 +303,7 @@ const BonLivraisonTable = () => {
 
     setFilteredBookings(result);
     calculateStatistics(result);
-  }, [selectedStatus, startDate, endDate, bookings]);
+  }, [selectedStatus, selectedPaymentType, startDate, endDate, bookings]);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -332,6 +348,7 @@ const BonLivraisonTable = () => {
               customerName: updatedInvoice.customerName,
               customerPhone: updatedInvoice.customerPhone,
               status: updatedInvoice.status,
+              paymentType: updatedInvoice.paymentType || bon.paymentType,
               total: newTotal,
               advancement: newAdvancement,
               remainingAmount: newRemainingAmount,
@@ -348,6 +365,7 @@ const BonLivraisonTable = () => {
               customerName: updatedInvoice.customerName,
               customerPhone: updatedInvoice.customerPhone,
               status: updatedInvoice.status,
+              paymentType: updatedInvoice.paymentType || bon.paymentType,
               total: newTotal,
               advancement: newAdvancement,
               remainingAmount: newRemainingAmount,
@@ -535,6 +553,24 @@ const BonLivraisonTable = () => {
             className="border-0 bg-white"
           >
             {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Input>
+        </InputGroup>
+
+        <InputGroup size="sm" className="w-auto shadow-sm rounded">
+          <InputGroupText className="bg-white border-0">
+            <FiDollarSign className="text-primary fs-6" />
+          </InputGroupText>
+          <Input
+            type="select"
+            value={selectedPaymentType}
+            onChange={(e) => setSelectedPaymentType(e.target.value)}
+            className="border-0 bg-white"
+          >
+            {paymentTypeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
